@@ -365,4 +365,10 @@ class BetfairMarketStreamClient(BetfairStreamClient):
         self._loop.create_task(self._post_connection())
 
     async def _post_connection(self) -> None:
-        await self.send(msgspec.json.encode(self.auth_message()))
+        for _ in range(5):
+            try:
+                await self.send(msgspec.json.encode(self.auth_message()))
+                return
+            except Exception as e:
+                self._log.error(f"Failed to send auth message({e}), retrying..")
+                await asyncio.sleep(1)
