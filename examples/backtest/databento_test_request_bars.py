@@ -21,6 +21,7 @@
 
 # %%
 import pandas as pd
+import os
 
 from nautilus_trader.adapters.databento.data_utils import databento_data
 from nautilus_trader.adapters.databento.data_utils import load_catalog
@@ -43,14 +44,15 @@ from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.persistence.config import DataCatalogConfig
 from nautilus_trader.trading.strategy import Strategy
+from dotenv import load_dotenv
 
 
 # %% [markdown]
 # ## parameters
 
 # %%
-# import nautilus_trader.adapters.databento.data_utils as db_data_utils
-# from nautilus_trader.adapters.databento.data_utils import init_databento_client
+import nautilus_trader.adapters.databento.data_utils as db_data_utils
+from nautilus_trader.adapters.databento.data_utils import init_databento_client
 # from option_trader import DATA_PATH, DATABENTO_API_KEY # personal library, use your own values especially for DATABENTO_API_KEY
 # db_data_utils.DATA_PATH = DATA_PATH
 
@@ -64,8 +66,9 @@ start_time = "2024-07-01T23:40"
 end_time = "2024-07-02T00:10"
 
 # a valid databento key can be entered here, the example below runs with already saved test data
-# db_data_utils.DATABENTO_API_KEY = DATABENTO_API_KEY
-# init_databento_client()
+load_dotenv() 
+db_data_utils.DATABENTO_API_KEY = os.getenv("DATABENTO_API_KEY")
+init_databento_client()
 
 # https://databento.com/docs/schemas-and-data-formats/whats-a-schema
 futures_data_bars = databento_data(

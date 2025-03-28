@@ -21,8 +21,10 @@
 
 # %%
 from nautilus_trader.adapters.databento import DATABENTO
+from nautilus_trader.adapters.databento import DATABENTO_CLIENT_ID
 from nautilus_trader.adapters.databento import DatabentoDataClientConfig
 from nautilus_trader.adapters.databento import DatabentoLiveDataClientFactory
+from nautilus_trader.adapters.databento.loaders import DatabentoDataLoader
 from nautilus_trader.adapters.databento.data_utils import databento_data
 from nautilus_trader.adapters.databento.data_utils import load_catalog
 from nautilus_trader.common.enums import LogColor
@@ -32,14 +34,17 @@ from nautilus_trader.config import LiveExecEngineConfig
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import StrategyConfig
 from nautilus_trader.config import TradingNodeConfig
+from nautilus_trader.persistence.catalog import ParquetDataCatalog
+from nautilus_trader.persistence.catalog.types import CatalogWriteMode
+from nautilus_trader.model.enums import BookType
 from nautilus_trader.core.datetime import time_object_to_dt
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.trading.strategy import Strategy
 from dotenv import load_dotenv
-import os
 
+import os
 
 # %% [markdown]
 # ## parameters
@@ -53,8 +58,7 @@ from nautilus_trader.adapters.databento.data_utils import init_databento_client
 catalog_folder = "options_catalog"
 catalog = load_catalog(catalog_folder)
 
-future_symbols = ["ESM4"]
-option_symbols = ["ESM4 P5230", "ESM4 P5250"]
+future_symbols = ["ESU4"]
 
 start_time = "2024-05-09T10:00"
 end_time = "2024-05-09T10:05"
@@ -72,14 +76,23 @@ futures_data = databento_data(
     "futures",
     catalog_folder,
 )
-options_data = databento_data(
-    option_symbols,
-    start_time,
-    end_time,
-    "mbp-1",
-    "options",
-    catalog_folder,
+
+print(f"File exists: {os.path.exists('data/ES/202407/glbx-mdp3-20240701.mbo.dbn.zst')}")
+
+# Create the loader
+loader = DatabentoDataLoader()
+
+# Define the instrument ID for ES futures
+instrument_id = InstrumentId.from_str("ESU4.GLBX")  # Adjust the month code as needed
+# Load the data from your path
+data = loader.from_dbn_file(
+    path="data/ES/202407/glbx-mdp3-20240701.mbo.dbn.zst",  # Your specified path
+    instrument_id=instrument_id,
+    as_legacy_cython=True,  # Set to True for compatibility with most Nautilus components
 )
+
+# Now you can work with the loaded data
+print(f"Loaded {len(data)} records")
 
 
 # %% [markdown]
@@ -96,23 +109,36 @@ class DataSubscriber(Strategy):
         super().__init__(config)
 
     def on_start(self) -> None:
-        start_time = time_object_to_dt("2024-05-09T10:00")
-        end_time = time_object_to_dt("2024-05-09T10:05")
-        self.request_quote_ticks(
-            InstrumentId.from_str("ESM4.XCME"),  # or "ESM4.GLBX"
+        start_time = time_object_to_dt("2024-07-01T10:00")
+        end_time = time_object_to_dt("2024-07-01T10:05")
+        # self.request_quote_ticks(
+        #     InstrumentId.from_str("ESU4.GLBX"),  # or "ESU4.GLBX"
+        #     start_time,
+        #     end_time,
+        #     params={"schema": "bbo-1m"},
+        # )
+
+        self.request_trade_ticks(
+            InstrumentId.from_str("ESU4.GLBX"),  # or "ESU4.GLBX"
             start_time,
             end_time,
-            params={"schema": "bbo-1m"},
+            params={"schema": "mbo"},
         )
 
-        # for instrument_id in self.config.instrument_ids:
-        # from nautilus_trader.model.enums import BookType
-
         # self.subscribe_order_book_deltas(
-        #     instrument_id=instrument_id,
+        #     instrument_id=InstrumentId.from_str("ESU4.GLBX"),
         #     book_type=BookType.L3_MBO,
         #     client_id=DATABENTO_CLIENT_ID,
         # )
+
+        # for instrument_id in self.config.instrument_ids:
+
+          # self.subscribe_order_book_deltas(
+          #     instrument_id=instrument_id,
+          #     book_type=BookType.L3_MBO,
+          #     client_id=DATABENTO_CLIENT_ID,
+          # )
+
         # self.subscribe_order_book_at_interval(
         #     instrument_id=instrument_id,
         #     book_type=BookType.L2_MBP,
@@ -230,7 +256,7 @@ data_clients: dict[str, LiveDataClientConfig] = {
 
 # Configure the trading node
 config_node = TradingNodeConfig(
-    trader_id=TraderId("TESTER-001"),
+    trader_id=TraderId("EDGE-001"),
     logging=logging,
     exec_engine=exec_engine,
     data_clients=data_clients,
