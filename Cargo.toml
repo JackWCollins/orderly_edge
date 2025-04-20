@@ -22,6 +22,7 @@ members = [
     "crates/serialization",
     "crates/test_kit",
     "crates/trading",
+    "crates"
 ]
 
 [workspace.package]

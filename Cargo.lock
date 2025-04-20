@@ -3519,6 +3519,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "nautilus-trader"
+version = "0.42.0"
+
+[[package]]
 name = "nautilus-trading"
 version = "0.42.0"
 dependencies = [

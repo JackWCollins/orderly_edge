@@ -24,6 +24,8 @@ from nautilus_trader.adapters.databento import DATABENTO
 from nautilus_trader.adapters.databento import DATABENTO_CLIENT_ID
 from nautilus_trader.adapters.databento import DatabentoDataClientConfig
 from nautilus_trader.adapters.databento import DatabentoLiveDataClientFactory
+from nautilus_trader.model.data import OrderBookDeltas
+from nautilus_trader.model import DataType
 from nautilus_trader.adapters.databento.loaders import DatabentoDataLoader
 from nautilus_trader.adapters.databento.data_utils import databento_data
 from nautilus_trader.adapters.databento.data_utils import load_catalog
@@ -72,12 +74,12 @@ futures_data = databento_data(
     future_symbols,
     start_time,
     end_time,
-    "ohlcv-1m",
+    "mbo",
     "futures",
     catalog_folder,
 )
 
-print(f"File exists: {os.path.exists('data/ES/202407/glbx-mdp3-20240701.mbo.dbn.zst')}")
+print(f"File exists: {os.path.exists('tests/test_data/large/ES/2024_07/glbx-mdp3-20240701.mbo.dbn.zst')}")
 
 # Create the loader
 loader = DatabentoDataLoader()
@@ -86,9 +88,9 @@ loader = DatabentoDataLoader()
 instrument_id = InstrumentId.from_str("ESU4.GLBX")  # Adjust the month code as needed
 # Load the data from your path
 data = loader.from_dbn_file(
-    path="data/ES/202407/glbx-mdp3-20240701.mbo.dbn.zst",  # Your specified path
+    path="tests/test_data/large/ES/2024_07/glbx-mdp3-20240701.mbo.dbn.zst",  # Your specified path
     instrument_id=instrument_id,
-    as_legacy_cython=True,  # Set to True for compatibility with most Nautilus components
+    as_legacy_cython=False,  # Set to True for compatibility with most Nautilus components
 )
 
 # Now you can work with the loaded data
@@ -117,6 +119,11 @@ class DataSubscriber(Strategy):
         #     end_time,
         #     params={"schema": "bbo-1m"},
         # )
+
+        self.request_data(
+            DataType(type=OrderBookDeltas, metadata={"instrument_id": InstrumentId.from_str("ESU4.GLBX")}),
+            client_id=DATABENTO_CLIENT_ID,
+        )
 
         self.request_trade_ticks(
             InstrumentId.from_str("ESU4.GLBX"),  # or "ESU4.GLBX"

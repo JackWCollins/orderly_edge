@@ -26,6 +26,8 @@ from nautilus_trader.core.rust.common import LogColor
 from nautilus_trader.model.book import OrderBook
 from nautilus_trader.model.data import OrderBookDeltas
 from nautilus_trader.model.data import TradeTick
+from nautilus_trader.model.data import BarType
+from nautilus_trader.model.data import Bar
 from nautilus_trader.model.enums import BookType
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import TimeInForce
@@ -103,6 +105,8 @@ class EnhancedAbsorptionStrategy(Strategy):
         self._trades_taken: int = 0
         self._profitable_trades: int = 0
 
+        self._last_check_time = None  # Initialize last check time
+
     def on_start(self) -> None:
         """Actions to be performed on strategy start."""
         self.instrument = self.cache.instrument(self.config.instrument_id)
@@ -114,10 +118,12 @@ class EnhancedAbsorptionStrategy(Strategy):
         # Subscribe to order book deltas and trades
         self.subscribe_order_book_deltas(self.instrument.id, self.book_type)
         self.subscribe_trade_ticks(self.instrument.id)
+        # bar_type = BarType.from_str(f"{self.instrument.id}-1-MINUTE-LAST-INTERNAL")
+        # self.subscribe_bars(bar_type)
         
         # Initialize timestamp
         self._last_trade_timestamp = self.clock.utc_now()
-        
+
         self.log.info(
             f"Starting Enhanced Absorption Strategy for {self.instrument.id.symbol}",
             color=LogColor.BLUE,
@@ -128,21 +134,46 @@ class EnhancedAbsorptionStrategy(Strategy):
         Actions to be performed when order book deltas are received.
         Updates the internal state, identifies liquidity areas, and checks for absorption.
         """
-        # Update high liquidity areas
-        self.identify_liquidity_areas()
-        
-        # Check for absorption patterns
-        self.check_for_absorption()
+
+            # Assuming deltas is a list and we take the timestamp from the first delta
+        if not deltas.deltas:
+            return  # No deltas to process
+
+        current_event_time = deltas.deltas[0].ts_event  # Get the timestamp from the first delta
+
+        if self._last_check_time is None or (current_event_time - self._last_check_time) >= 1_000_000_000:  # 1 second in nanoseconds
+            # Update high liquidity areas
+            self.identify_liquidity_areas()
+            
+            # Check for absorption patterns
+            self.check_for_absorption()
+
+            # Update the last check time
+            self._last_check_time = current_event_time
 
     def on_trade_tick(self, tick: TradeTick) -> None:
         """
         Actions to be performed when trade ticks are received.
         Used to track actual trades occurring in the market.
         """
-        self.log.debug(f"Trade: {tick.price} x {tick.size} ({tick.side})")
+        self.log.info(f"Trade: {tick.price} x {tick.size} ({tick.side})")
         
         # We could use this to enhance our absorption detection
         # by tracking the actual trades happening at each level
+        pass
+
+    # def on_bar(self, bar: Bar) -> None:
+    #     """
+    #     Actions to be performed when a bar is received.
+    #     """
+    #     self.log.info(f"Bar: {bar.timestamp} {bar.open} {bar.high} {bar.low} {bar.close} {bar.volume}")
+
+    #     # Identify liquidity areas
+    #     self.identify_liquidity_areas()
+
+    #     # Check for absorption patterns
+    #     self.check_for_absorption()
+
 
     def identify_liquidity_areas(self) -> None:
         """
@@ -156,20 +187,20 @@ class EnhancedAbsorptionStrategy(Strategy):
         # Clear previous liquidity areas
         self._bid_liquidity_areas = []
         self._ask_liquidity_areas = []
-        
+
         # Check bid side for high liquidity
         for level in book.bids()[:self.config.monitor_levels]:
             total_level_size = sum(order.size.as_double() for order in level.orders())
             if total_level_size > self.config.liquidity_threshold:
                 self._bid_liquidity_areas.append(level.price)
-                self.log.debug(f"High bid liquidity at {level.price}: {total_level_size}")
+                self.log.info(f"High bid liquidity at {level.price}: {total_level_size}")
                 
         # Check ask side for high liquidity
         for level in book.asks()[:self.config.monitor_levels]:
             total_level_size = sum(order.size.as_double() for order in level.orders())
             if total_level_size > self.config.liquidity_threshold:
                 self._ask_liquidity_areas.append(level.price)
-                self.log.debug(f"High ask liquidity at {level.price}: {total_level_size}")
+                self.log.info(f"High ask liquidity at {level.price}: {total_level_size}")
 
     def check_for_absorption(self) -> None:
         """
@@ -266,14 +297,14 @@ class EnhancedAbsorptionStrategy(Strategy):
                 # If the price level still exists but with reduced size
                 if price in current_levels and current_levels[price] < prev_levels[price]:
                     # This is likely due to trades (absorption)
-                    volume_change = (prev_levels[price] - current_levels[price]).as_double()
+                    volume_change = (float(prev_levels[price]) - float(current_levels[price]))
                     absorption_volume += volume_change
                     absorbed_prices.append(price)
                     self.log.debug(f"Absorption at {price}: {volume_change}")
                 
                 # If the price level is gone completely (complete absorption)
                 elif price not in current_levels:
-                    absorption_volume += prev_levels[price].as_double()
+                    absorption_volume += float(prev_levels[price])
                     absorbed_prices.append(price)
                     self.log.debug(f"Complete absorption at {price}: {prev_levels[price].as_double()}")
                     
@@ -309,9 +340,9 @@ class EnhancedAbsorptionStrategy(Strategy):
             return
             
         # Log absorption values for monitoring
-        self.log.info(
-            f"Absorption values - Bid: {bid_volume:.2f} @ {bid_prices}, Ask: {ask_volume:.2f} @ {ask_prices}",
-        )
+        # self.log.info(
+        #     f"Absorption values - Bid: {bid_volume:.2f} @ {bid_prices}, Ask: {ask_volume:.2f} @ {ask_prices}",
+        # )
         
         # Record this absorption event
         self._absorption_events.append({

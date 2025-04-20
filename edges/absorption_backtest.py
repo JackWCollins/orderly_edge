@@ -31,10 +31,7 @@ import pandas as pd
 from decimal import Decimal
 from dotenv import load_dotenv
 
-from nautilus_trader.adapters.databento import DATABENTO
-from nautilus_trader.adapters.databento.loaders import DatabentoDataLoader
 from nautilus_trader.adapters.databento.data_utils import init_databento_client
-from nautilus_trader.adapters.databento.data_utils import load_catalog
 import nautilus_trader.adapters.databento.data_utils as db_data_utils
 
 from nautilus_trader.common.enums import LogColor
@@ -43,14 +40,12 @@ from nautilus_trader.backtest.node import BacktestEngineConfig
 from nautilus_trader.backtest.node import BacktestNode
 from nautilus_trader.backtest.node import BacktestRunConfig
 from nautilus_trader.backtest.node import BacktestVenueConfig
+
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import ImportableStrategyConfig
 from nautilus_trader.model.identifiers import InstrumentId
-from nautilus_trader.model.identifiers import TraderId
-from nautilus_trader.model.identifiers import Venue
+from nautilus_trader.model.data import OrderBookDeltas
 from nautilus_trader.persistence.catalog import ParquetDataCatalog
-from nautilus_trader.persistence.catalog.types import CatalogWriteMode
-from nautilus_trader.trading.strategy import Strategy
 
 # Import the AbsorptionStrategy and its config
 from edges.absorption import EnhancedAbsorptionStrategy
@@ -64,18 +59,19 @@ from edges.absorption import EnhancedAbsorptionConfig
 load_dotenv()
 
 # Catalog configuration
-catalog_folder = "es_mbo_catalog"
+catalog_folder = "tests/test_data/databento/data/order_book_delta/ESM5.GLBX"
 
 # Databento API configuration
 db_data_utils.DATABENTO_API_KEY = os.getenv("DATABENTO_API_KEY")
 init_databento_client()
 
 # Instrument configuration
-instrument_id = InstrumentId.from_str("ESU4.GLBX")  # ES September 2024 contract
+instrument_id = InstrumentId.from_str("ESM5.GLBX")  
+# print(f"Instrument ID: {instrument_id}, venue: {instrument_id.venue}")
 
 # Create or load the catalog
-# catalog = ParquetDataCatalog(path=catalog_folder)
-# print(f"Catalog instruments: {catalog.instruments()}")
+catalog = ParquetDataCatalog(path=catalog_folder)
+print(f"Catalog instruments: {catalog.instruments()}")
 # instrument = catalog.instruments()[0]
 # print(f"Instrument: {instrument}")
 
@@ -89,7 +85,7 @@ logging = LoggingConfig(
 venue_configs = [
     BacktestVenueConfig(
         name="GLBX",
-        oms_type="HEDGING",
+        oms_type="NETTING",
         account_type="MARGIN",
         base_currency="USD",
         starting_balances=["100_000 USD"],
@@ -101,9 +97,9 @@ data_configs = [
   BacktestDataConfig(
       catalog_path=catalog_folder,
       instrument_id=instrument_id,
-      data_cls="nautilus_trader.core.nautilus_pyo3.model:OrderBookDelta",
-      start_time=pd.Timestamp("2024-07-01 00:00:00", tz="UTC"),
-      end_time=pd.Timestamp("2024-07-01 23:59:59", tz="UTC"),
+      data_cls=OrderBookDeltas,
+      start_time=pd.Timestamp("2025-03-27 00:00:00", tz="UTC"),
+      end_time=pd.Timestamp("2025-03-27 01:00:00", tz="UTC"),
   )
 ]
 
