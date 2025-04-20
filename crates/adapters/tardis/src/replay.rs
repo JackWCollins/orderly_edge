@@ -33,9 +33,9 @@ use nautilus_model::{
 };
 use nautilus_serialization::{
     arrow::{
-        bars_to_arrow_record_batch_bytes, order_book_deltas_to_arrow_record_batch_bytes,
-        order_book_depth10_to_arrow_record_batch_bytes, quote_ticks_to_arrow_record_batch_bytes,
-        trade_ticks_to_arrow_record_batch_bytes,
+        bars_to_arrow_record_batch_bytes, book_deltas_to_arrow_record_batch_bytes,
+        book_depth10_to_arrow_record_batch_bytes, quotes_to_arrow_record_batch_bytes,
+        trades_to_arrow_record_batch_bytes,
     },
     parquet::write_batch_to_parquet,
 };
@@ -104,7 +104,7 @@ async fn gather_instruments_info(
 
 pub async fn run_tardis_machine_replay_from_config(config_filepath: &Path) -> anyhow::Result<()> {
     tracing::info!("Starting replay");
-    tracing::info!("Config filepath: {}", config_filepath.display());
+    tracing::info!("Config filepath: {config_filepath:?}");
 
     let config_data = fs::read_to_string(config_filepath).expect("Failed to read config file");
     let config: TardisReplayConfig =
@@ -122,7 +122,7 @@ pub async fn run_tardis_machine_replay_from_config(config_filepath: &Path) -> an
         })
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
 
-    tracing::info!("Output path: {}", path.display());
+    tracing::info!("Output path: {path:?}");
 
     let normalize_symbols = config.normalize_symbols.unwrap_or(true);
     tracing::info!("normalize_symbols={normalize_symbols}");
@@ -188,6 +188,7 @@ pub async fn run_tardis_machine_replay_from_config(config_filepath: &Path) -> an
             Data::Trade(msg) => handle_trade_msg(msg, &mut trades_map, &mut trades_cursors, &path),
             Data::Bar(msg) => handle_bar_msg(msg, &mut bars_map, &mut bars_cursors, &path),
             Data::Delta(_) => panic!("Individual delta message not implemented (or required)"),
+            _ => panic!("Not implemented"),
         }
 
         msg_count += 1;
@@ -196,7 +197,7 @@ pub async fn run_tardis_machine_replay_from_config(config_filepath: &Path) -> an
         }
     }
 
-    // Naively iterate through every remaining type and instrument sequentially
+    // Iterate through every remaining type and instrument sequentially
 
     for (instrument_id, deltas) in deltas_map {
         let cursor = deltas_cursors.get(&instrument_id).expect("Expected cursor");
@@ -352,10 +353,10 @@ fn batch_and_write_deltas(
     path: &Path,
 ) {
     let typename = stringify!(OrderBookDeltas);
-    match order_book_deltas_to_arrow_record_batch_bytes(deltas) {
+    match book_deltas_to_arrow_record_batch_bytes(deltas) {
         Ok(batch) => write_batch(batch, typename, instrument_id, date, path),
         Err(e) => {
-            tracing::error!("Error converting `{typename}` to Arrow: {e:?}",);
+            tracing::error!("Error converting `{typename}` to Arrow: {e:?}");
         }
     }
 }
@@ -367,10 +368,10 @@ fn batch_and_write_depths(
     path: &Path,
 ) {
     let typename = stringify!(OrderBookDepth10);
-    match order_book_depth10_to_arrow_record_batch_bytes(depths) {
+    match book_depth10_to_arrow_record_batch_bytes(depths) {
         Ok(batch) => write_batch(batch, typename, instrument_id, date, path),
         Err(e) => {
-            tracing::error!("Error converting `{typename}` to Arrow: {e:?}",);
+            tracing::error!("Error converting `{typename}` to Arrow: {e:?}");
         }
     }
 }
@@ -382,10 +383,10 @@ fn batch_and_write_quotes(
     path: &Path,
 ) {
     let typename = stringify!(QuoteTick);
-    match quote_ticks_to_arrow_record_batch_bytes(quotes) {
+    match quotes_to_arrow_record_batch_bytes(quotes) {
         Ok(batch) => write_batch(batch, typename, instrument_id, date, path),
         Err(e) => {
-            tracing::error!("Error converting `{typename}` to Arrow: {e:?}",);
+            tracing::error!("Error converting `{typename}` to Arrow: {e:?}");
         }
     }
 }
@@ -397,10 +398,10 @@ fn batch_and_write_trades(
     path: &Path,
 ) {
     let typename = stringify!(TradeTick);
-    match trade_ticks_to_arrow_record_batch_bytes(trades) {
+    match trades_to_arrow_record_batch_bytes(trades) {
         Ok(batch) => write_batch(batch, typename, instrument_id, date, path),
         Err(e) => {
-            tracing::error!("Error converting `{typename}` to Arrow: {e:?}",);
+            tracing::error!("Error converting `{typename}` to Arrow: {e:?}");
         }
     }
 }
@@ -416,9 +417,9 @@ fn batch_and_write_bars(bars: Vec<Bar>, bar_type: &BarType, date: NaiveDate, pat
     };
 
     let filepath = path.join(parquet_filepath_bars(bar_type, date));
-    match write_batch_to_parquet(batch, &filepath, None) {
-        Ok(()) => tracing::info!("File written: {}", filepath.display()),
-        Err(e) => tracing::error!("Error writing {}: {e:?}", filepath.display()),
+    match write_batch_to_parquet(batch, &filepath, None, None, None) {
+        Ok(()) => tracing::info!("File written: {filepath:?}"),
+        Err(e) => tracing::error!("Error writing {filepath:?}: {e:?}"),
     }
 }
 
@@ -449,9 +450,9 @@ fn write_batch(
     path: &Path,
 ) {
     let filepath = path.join(parquet_filepath(typename, instrument_id, date));
-    match write_batch_to_parquet(batch, &filepath, None) {
-        Ok(()) => tracing::info!("File written: {}", filepath.display()),
-        Err(e) => tracing::error!("Error writing {}: {e:?}", filepath.display()),
+    match write_batch_to_parquet(batch, &filepath, None, None, None) {
+        Ok(()) => tracing::info!("File written: {filepath:?}"),
+        Err(e) => tracing::error!("Error writing {filepath:?}: {e:?}"),
     }
 }
 

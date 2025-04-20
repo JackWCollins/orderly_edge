@@ -28,7 +28,7 @@ use nautilus_persistence::{
     python::backend::session::NautilusDataType,
 };
 use nautilus_serialization::arrow::ArrowSchemaProvider;
-use nautilus_test_kit::common::get_nautilus_test_data_file_path;
+use nautilus_testkit::common::get_nautilus_test_data_file_path;
 #[cfg(target_os = "linux")]
 use procfs::{self, process::Process};
 use pyo3::{prelude::*, types::PyCapsule};
@@ -186,7 +186,7 @@ fn test_quote_tick_python_control_flow() {
     });
 }
 
-#[ignore] // TODO: Investigate why this is suddenly failing the monotonically increasing assert?
+#[ignore = "Investigate why this is suddenly failing the monotonically increasing assert?"]
 #[rstest]
 fn test_order_book_delta_query() {
     let expected_length = 1077;
@@ -338,7 +338,7 @@ fn test_bar_query() {
     assert!(is_monotonically_increasing_by_init(&ticks));
 }
 
-#[ignore] // TODO: Remove file after asserts
+#[ignore = "Remove file after asserts"]
 #[rstest]
 fn test_catalog_serialization_json_round_trip() {
     // Setup
@@ -358,7 +358,9 @@ fn test_catalog_serialization_json_round_trip() {
     let quote_ticks: Vec<QuoteTick> = to_variant(quote_ticks);
 
     // Write to JSON using catalog
-    let json_path = catalog.write_to_json(quote_ticks.clone(), None, false);
+    let json_path = catalog
+        .write_to_json(quote_ticks.clone(), None, false)
+        .unwrap();
 
     // Read back from JSON
     let json_str = std::fs::read_to_string(json_path).unwrap();
@@ -433,7 +435,7 @@ fn test_datafusion_parquet_round_trip() {
     }
 }
 
-#[test]
+#[rstest]
 fn test_catalog_export_functionality() {
     // Create a temporary directory for test files
     let temp_dir = tempfile::tempdir().expect("Failed to create temp directory");
@@ -459,7 +461,9 @@ fn test_catalog_export_functionality() {
 
     // Export to temporary JSON
     let json_file = temp_dir.path().join("temp.json");
-    let json_path = catalog.write_to_json(quotes.clone(), Some(json_file), false);
+    let json_path = catalog
+        .write_to_json(quotes.clone(), Some(json_file), false)
+        .unwrap();
 
     // Read JSON file and parse back to Vec<QuoteTick>
     let json_content = std::fs::read_to_string(&json_path).expect("Failed to read JSON file");
@@ -468,7 +472,9 @@ fn test_catalog_export_functionality() {
 
     // Write back to parquet
     let parquet_path = temp_dir.path().join("temp.parquet");
-    let parquet_path = catalog.write_to_parquet(quotes_from_json, Some(parquet_path), None, None);
+    let parquet_path = catalog
+        .write_to_parquet(quotes_from_json, Some(parquet_path), None, None, None)
+        .unwrap();
 
     // Read parquet and verify data
     let final_result = catalog

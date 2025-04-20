@@ -53,7 +53,12 @@ trade_size = Decimal("0.010")
 # Configure the trading node
 config_node = TradingNodeConfig(
     trader_id=TraderId("TESTER-001"),
-    logging=LoggingConfig(log_level="INFO", use_pyo3=True),
+    logging=LoggingConfig(
+        log_level="INFO",
+        # log_level_file="DEBUG",
+        # log_file_max_size=1_000_000_000,
+        use_pyo3=True,
+    ),
     exec_engine=LiveExecEngineConfig(
         reconciliation=True,
         open_check_interval_secs=5.0,
@@ -63,6 +68,12 @@ config_node = TradingNodeConfig(
         # snapshot_orders=True,
         # snapshot_positions=True,
         # snapshot_positions_interval_secs=5.0,
+        purge_closed_orders_interval_mins=15,  # Example of purging closed orders for HFT
+        purge_closed_orders_buffer_mins=60,  # Purged orders closed for at least an hour
+        purge_closed_positions_interval_mins=15,  # Example of purging closed positions for HFT
+        purge_closed_positions_buffer_mins=60,  # Purge positions closed for at least an hour
+        purge_account_events_interval_mins=15,  # Example of purging account events for HFT
+        purge_account_events_lookback_mins=60,  # Purge account events occurring more than an hour ago
     ),
     cache=CacheConfig(
         # database=DatabaseConfig(),

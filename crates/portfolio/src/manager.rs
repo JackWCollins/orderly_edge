@@ -20,10 +20,10 @@ use std::{cell::RefCell, rc::Rc};
 use nautilus_common::{cache::Cache, clock::Clock};
 use nautilus_core::{UUID4, UnixNanos};
 use nautilus_model::{
-    accounts::{any::AccountAny, base::Account, cash::CashAccount, margin::MarginAccount},
+    accounts::{Account, AccountAny, CashAccount, MarginAccount},
     enums::{AccountType, OrderSide, OrderSideSpecified, PriceType},
     events::{AccountState, OrderFilled},
-    instruments::InstrumentAny,
+    instruments::{Instrument, InstrumentAny},
     orders::{Order, OrderAny},
     position::Position,
     types::{AccountBalance, Money},
@@ -153,6 +153,12 @@ impl AccountsManager {
                     instrument.make_price(position.avg_px_open),
                     None,
                 ),
+                InstrumentAny::CryptoOption(i) => account.calculate_maintenance_margin(
+                    i,
+                    position.quantity,
+                    instrument.make_price(position.avg_px_open),
+                    None,
+                ),
                 InstrumentAny::CryptoPerpetual(i) => account.calculate_maintenance_margin(
                     i,
                     position.quantity,
@@ -224,14 +230,10 @@ impl AccountsManager {
             total_margin_maint += margin_maint;
         }
 
-        let margin_maint_money = Money::new(total_margin_maint, currency);
-        account.update_maintenance_margin(instrument.id(), margin_maint_money);
+        let margin_maint = Money::new(total_margin_maint, currency);
+        account.update_maintenance_margin(instrument.id(), margin_maint);
 
-        log::info!(
-            "{} margin_maint={}",
-            instrument.id(),
-            margin_maint_money.to_string()
-        );
+        log::info!("{} margin_maint={margin_maint}", instrument.id());
 
         // Generate and return account state
         Some((
@@ -315,19 +317,15 @@ impl AccountsManager {
             total_locked += locked;
         }
 
-        let locked_money = Money::new(total_locked.to_f64()?, currency);
+        let balance_locked = Money::new(total_locked.to_f64()?, currency);
 
         if let Some(balance) = account.balances.get_mut(&instrument.quote_currency()) {
-            balance.locked = locked_money;
+            balance.locked = balance_locked;
             let currency = balance.currency;
             account.recalculate_balance(currency);
         }
 
-        log::info!(
-            "{} balance_locked={}",
-            instrument.id(),
-            locked_money.to_string()
-        );
+        log::info!("{} balance_locked={balance_locked}", instrument.id());
 
         Some((
             account.clone(),
@@ -373,6 +371,9 @@ impl AccountsManager {
                     account.calculate_initial_margin(i, order.quantity(), price?, None)
                 }
                 InstrumentAny::CryptoFuture(i) => {
+                    account.calculate_initial_margin(i, order.quantity(), price?, None)
+                }
+                InstrumentAny::CryptoOption(i) => {
                     account.calculate_initial_margin(i, order.quantity(), price?, None)
                 }
                 InstrumentAny::CryptoPerpetual(i) => {
@@ -426,16 +427,12 @@ impl AccountsManager {
         }
 
         let money = Money::new(total_margin_init, currency);
-        let margin_init_money = {
+        let margin_init = {
             account.update_initial_margin(instrument.id(), money);
             money
         };
 
-        log::info!(
-            "{} margin_init={}",
-            instrument.id(),
-            margin_init_money.to_string()
-        );
+        log::info!("{} margin_init={margin_init}", instrument.id());
 
         Some((
             account.clone(),
@@ -599,9 +596,7 @@ impl AccountsManager {
             } else {
                 if pnl.as_decimal() < Decimal::ZERO {
                     log::error!(
-                        "Cannot complete transaction: no {} to deduct a {} realized PnL from",
-                        currency,
-                        pnl
+                        "Cannot complete transaction: no {currency} to deduct a {pnl} realized PnL from"
                     );
                     return;
                 }
@@ -627,9 +622,7 @@ impl AccountsManager {
             } else {
                 if commission.as_decimal() > Decimal::ZERO {
                     log::error!(
-                        "Cannot complete transaction: no {} balance to deduct a {} commission from",
-                        currency,
-                        commission
+                        "Cannot complete transaction: no {currency} balance to deduct a {commission} commission from"
                     );
                     return;
                 }

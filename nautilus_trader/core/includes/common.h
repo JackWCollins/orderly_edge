@@ -356,7 +356,7 @@ uint64_t test_clock_timestamp_us(const struct TestClock_API *clock);
 
 uint64_t test_clock_timestamp_ns(const struct TestClock_API *clock);
 
-PyObject *test_clock_timer_names(const struct TestClock_API *clock);
+const char *test_clock_timer_names(const struct TestClock_API *clock);
 
 uintptr_t test_clock_timer_count(struct TestClock_API *clock);
 
@@ -369,7 +369,8 @@ uintptr_t test_clock_timer_count(struct TestClock_API *clock);
 void test_clock_set_time_alert(struct TestClock_API *clock,
                                const char *name_ptr,
                                uint64_t alert_time_ns,
-                               PyObject *callback_ptr);
+                               PyObject *callback_ptr,
+                               uint8_t allow_past);
 
 /**
  * # Safety
@@ -382,7 +383,8 @@ void test_clock_set_timer(struct TestClock_API *clock,
                           uint64_t interval_ns,
                           uint64_t start_time_ns,
                           uint64_t stop_time_ns,
-                          PyObject *callback_ptr);
+                          PyObject *callback_ptr,
+                          uint8_t allow_past);
 
 /**
  * # Safety
@@ -428,7 +430,7 @@ uint64_t live_clock_timestamp_us(struct LiveClock_API *clock);
 
 uint64_t live_clock_timestamp_ns(struct LiveClock_API *clock);
 
-PyObject *live_clock_timer_names(const struct LiveClock_API *clock);
+const char *live_clock_timer_names(const struct LiveClock_API *clock);
 
 uintptr_t live_clock_timer_count(struct LiveClock_API *clock);
 
@@ -447,7 +449,8 @@ uintptr_t live_clock_timer_count(struct LiveClock_API *clock);
 void live_clock_set_time_alert(struct LiveClock_API *clock,
                                const char *name_ptr,
                                uint64_t alert_time_ns,
-                               PyObject *callback_ptr);
+                               PyObject *callback_ptr,
+                               uint8_t allow_past);
 
 /**
  * # Safety
@@ -466,7 +469,8 @@ void live_clock_set_timer(struct LiveClock_API *clock,
                           uint64_t interval_ns,
                           uint64_t start_time_ns,
                           uint64_t stop_time_ns,
-                          PyObject *callback_ptr);
+                          PyObject *callback_ptr,
+                          uint8_t allow_past);
 
 /**
  * # Safety
@@ -532,7 +536,7 @@ enum LogColor log_color_from_cstr(const char *ptr);
  * Initializes logging.
  *
  * Logging should be used for Python and sync Rust logic which is most of
- * the components in the main `nautilus_trader` package.
+ * the components in the [nautilus_trader](https://pypi.org/project/nautilus_trader) package.
  * Logging can be configured to filter components and write up to a specific level only
  * by passing a configuration using the `NAUTILUS_LOG` environment variable.
  *
@@ -556,7 +560,9 @@ struct LogGuard_API logging_init(TraderId_t trader_id,
                                  const char *component_levels_ptr,
                                  uint8_t is_colored,
                                  uint8_t is_bypassed,
-                                 uint8_t print_config);
+                                 uint8_t print_config,
+                                 uint64_t max_file_size,
+                                 uint32_t max_backup_count);
 
 /**
  * Creates a new log event.

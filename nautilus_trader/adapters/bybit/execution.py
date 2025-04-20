@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+from asyncio import TaskGroup
 from typing import TYPE_CHECKING
 
 import msgspec
@@ -83,6 +84,7 @@ from nautilus_trader.model.orders import TrailingStopMarketOrder
 if TYPE_CHECKING:
     import asyncio
 
+    from nautilus_trader.adapters.bybit.common.enums import BybitPositionMode
     from nautilus_trader.adapters.bybit.config import BybitExecClientConfig
     from nautilus_trader.adapters.bybit.http.client import BybitHttpClient
     from nautilus_trader.adapters.bybit.providers import BybitInstrumentProvider
@@ -177,6 +179,10 @@ class BybitExecutionClient(LiveExecutionClient):
         self._use_ws_execution_fast = config.use_ws_execution_fast
         self._use_http_batch_api = config.use_http_batch_api
 
+        self._futures_leverages = config.futures_leverages
+        self._margin_mode = config.margin_mode
+        self._position_mode = config.position_mode
+
         self._log.info(f"Account type: {account_type_to_str(account_type)}", LogColor.BLUE)
         self._log.info(f"Product types: {[p.value for p in product_types]}", LogColor.BLUE)
         self._log.info(f"{config.use_gtd=}", LogColor.BLUE)
@@ -187,6 +193,9 @@ class BybitExecutionClient(LiveExecutionClient):
         self._log.info(f"{config.retry_delay=}", LogColor.BLUE)
         self._log.info(f"{config.recv_window_ms=:_}", LogColor.BLUE)
         self._log.info(f"{config.ws_trade_timeout_secs=}", LogColor.BLUE)
+        self._log.info(f"{config.futures_leverages=}", LogColor.BLUE)
+        self._log.info(f"{config.margin_mode=}", LogColor.BLUE)
+        self._log.info(f"{config.position_mode=}", LogColor.BLUE)
 
         self._enum_parser = BybitEnumParser()
 
@@ -225,6 +234,7 @@ class BybitExecutionClient(LiveExecutionClient):
                 api_secret=config.api_secret or get_api_secret(config.demo, config.testnet),
                 loop=loop,
                 ws_trade_timeout_secs=config.ws_trade_timeout_secs,
+                recv_window_ms=config.recv_window_ms,
             )
             self._order_single_client = self._ws_order_client
             if config.use_http_batch_api:
@@ -244,6 +254,14 @@ class BybitExecutionClient(LiveExecutionClient):
             OrderType.MARKET_IF_TOUCHED: self._submit_market_if_touched_order,
             OrderType.LIMIT_IF_TOUCHED: self._submit_limit_if_touched_order,
             OrderType.TRAILING_STOP_MARKET: self._submit_trailing_stop_market,
+        }
+
+        self._batch_order_create_handlers = {
+            OrderType.MARKET: self._create_market_batch_order,
+            OrderType.LIMIT: self._create_limit_batch_order,
+            OrderType.LIMIT_IF_TOUCHED: self._create_limit_if_touched_batch_order,
+            OrderType.STOP_MARKET: self._create_stop_market_batch_order,
+            OrderType.MARKET_IF_TOUCHED: self._create_market_if_touched_batch_order,
         }
 
         # Decoders
@@ -303,13 +321,13 @@ class BybitExecutionClient(LiveExecutionClient):
         self,
         command: GenerateOrderStatusReports,
     ) -> list[OrderStatusReport]:
+        instrument_id = command.instrument_id
+
         self._log.debug("Requesting OrderStatusReports...")
         reports: list[OrderStatusReport] = []
 
         try:
-            _symbol = (
-                command.instrument_id.symbol.value if command.instrument_id is not None else None
-            )
+            _symbol = instrument_id.symbol.value if instrument_id is not None else None
             symbol = BybitSymbol(_symbol) if _symbol is not None else None
             # active_symbols = self._get_cache_active_symbols()
             # active_symbols.update(await self._get_active_position_symbols(symbol))
@@ -362,13 +380,17 @@ class BybitExecutionClient(LiveExecutionClient):
         self,
         command: GenerateOrderStatusReport,
     ) -> OrderStatusReport | None:
+        instrument_id = command.instrument_id
+        client_order_id = command.client_order_id
+        venue_order_id = command.venue_order_id
+
         PyCondition.is_false(
-            command.client_order_id is None and command.venue_order_id is None,
+            client_order_id is None and venue_order_id is None,
             "both `client_order_id` and `venue_order_id` were `None`",
         )
 
-        if command.client_order_id:
-            order = self._cache.order(command.client_order_id)
+        if client_order_id:
+            order = self._cache.order(client_order_id)
             if order and order.order_type in (
                 OrderType.TRAILING_STOP_MARKET,
                 OrderType.TRAILING_STOP_LIMIT,
@@ -377,25 +399,23 @@ class BybitExecutionClient(LiveExecutionClient):
                 client_order_id = None
 
         self._log.info(
-            f"Generating OrderStatusReport for "
-            f"{repr(client_order_id) if client_order_id else ''} "
-            f"{repr(command.venue_order_id) if command.venue_order_id else ''}",
+            f"Generating OrderStatusReport for {repr(client_order_id) if client_order_id else ''} {repr(venue_order_id) if venue_order_id else ''}",
         )
         try:
-            bybit_symbol = BybitSymbol(command.instrument_id.symbol.value)
+            bybit_symbol = BybitSymbol(instrument_id.symbol.value)
             product_type = bybit_symbol.product_type
             bybit_orders = await self._http_account.query_order(
                 product_type=product_type,
-                symbol=command.instrument_id.symbol.value,
+                symbol=instrument_id.symbol.value,
                 client_order_id=client_order_id.value if client_order_id else None,
-                order_id=command.venue_order_id.value if command.venue_order_id else None,
+                order_id=venue_order_id.value if venue_order_id else None,
             )
             if len(bybit_orders) == 0:
-                self._log.error(f"Received no order for {command.venue_order_id}")
+                self._log.error(f"Received no order for {venue_order_id}")
                 return None
             target_order = bybit_orders[0]
             if len(bybit_orders) > 1:
-                self._log.warning(f"Received more than one order for {command.venue_order_id}")
+                self._log.warning(f"Received more than one order for {venue_order_id}")
                 target_order = bybit_orders[0]
 
             order_link_id = bybit_orders[0].orderLinkId
@@ -407,7 +427,7 @@ class BybitExecutionClient(LiveExecutionClient):
             order_report = target_order.parse_to_order_status_report(
                 client_order_id=client_order_id,
                 account_id=self.account_id,
-                instrument_id=command.instrument_id,
+                instrument_id=instrument_id,
                 report_id=UUID4(),
                 enum_parser=self._enum_parser,
                 ts_init=self._clock.timestamp_ns(),
@@ -422,13 +442,13 @@ class BybitExecutionClient(LiveExecutionClient):
         self,
         command: GenerateFillReports,
     ) -> list[FillReport]:
+        instrument_id = command.instrument_id
+
         self._log.debug("Requesting FillReports...")
         reports: list[FillReport] = []
 
         try:
-            _symbol = (
-                command.instrument_id.symbol.value if command.instrument_id is not None else None
-            )
+            _symbol = instrument_id.symbol.value if instrument_id is not None else None
             symbol = BybitSymbol(_symbol) if _symbol is not None else None
             # active_symbols = self._get_cache_active_symbols()
             # active_symbols.update(await self._get_active_position_symbols(symbol))
@@ -463,12 +483,14 @@ class BybitExecutionClient(LiveExecutionClient):
         self,
         command: GeneratePositionStatusReports,
     ) -> list[PositionStatusReport]:
+        instrument_id = command.instrument_id
+
         reports: list[PositionStatusReport] = []
 
         try:
-            if command.instrument_id:
-                self._log.debug(f"Requesting PositionStatusReport for {command.instrument_id}")
-                bybit_symbol = BybitSymbol(command.instrument_id.symbol.value)
+            if instrument_id:
+                self._log.debug(f"Requesting PositionStatusReport for {instrument_id}")
+                bybit_symbol = BybitSymbol(instrument_id.symbol.value)
                 positions = await self._http_account.query_position_info(
                     bybit_symbol.product_type,
                     bybit_symbol.raw_symbol,
@@ -476,7 +498,7 @@ class BybitExecutionClient(LiveExecutionClient):
                 for position in positions:
                     position_report = position.parse_to_position_status_report(
                         account_id=self.account_id,
-                        instrument_id=command.instrument_id,
+                        instrument_id=instrument_id,
                         report_id=UUID4(),
                         ts_init=self._clock.timestamp_ns(),
                     )
@@ -572,7 +594,73 @@ class BybitExecutionClient(LiveExecutionClient):
                     ts_event=millis_to_nanos(ts_event),
                 )
             except Exception as e:
-                self._log.error(f"Failed to generate AccountState: {e}")
+                self._log.exception("Failed to generate AccountState", e)
+
+        # Set Leverages
+        if self._futures_leverages:
+            async with TaskGroup() as tg:
+                [
+                    tg.create_task(self.set_leverage(symbol=symbol, leverage=leverage))
+                    for symbol, leverage in self._futures_leverages.items()
+                    if symbol.is_linear or symbol.is_inverse
+                ]
+
+        # Set Position Mode
+        if self._position_mode:
+            async with TaskGroup() as tg:
+                [
+                    tg.create_task(self.set_position_mode(symbol=symbol, mode=mode))
+                    for symbol, mode in self._position_mode.items()
+                    if symbol.is_linear
+                ]
+
+        # Set Margin Mode
+        if self._margin_mode:
+            res_set_margin_mode = await self._http_account.set_margin_mode(self._margin_mode)
+            self._log.info(f"Set account margin mode result: {res_set_margin_mode.retMsg}")
+
+    async def set_leverage(
+        self,
+        symbol: BybitSymbol,
+        leverage: int,
+    ) -> None:
+        try:
+            res = await self._http_account.set_leverage(
+                category=symbol.product_type,
+                symbol=symbol.raw_symbol,
+                buy_leverage=str(leverage),
+                sell_leverage=str(leverage),
+            )
+            self._log.info(f"Set symbol `{symbol}` leverage to `{leverage}` result: {res.retMsg}")
+        except BybitError as e:
+            if e.code == 110043:  # Set leverage has not been modified. (already set)
+                self._log.info(
+                    f"Set symbol `{symbol}` leverage to `{leverage}` result: {e.message}",
+                )
+                return
+
+            raise e
+
+    async def set_position_mode(
+        self,
+        symbol: BybitSymbol,
+        mode: BybitPositionMode,
+    ) -> None:
+        try:
+            res = await self._http_account.switch_mode(
+                category=symbol.product_type,
+                symbol=symbol.raw_symbol,
+                mode=mode,
+            )
+            self._log.info(f"Set symbol `{symbol}` position mode to `{mode}` result: {res.retMsg}")
+        except BybitError as e:  # Position mode has not been modified. (already set)
+            if e.code == 110025:
+                self._log.info(
+                    f"Set symbol `{symbol}` position mode to `{mode}` result: {e.message}",
+                )
+                return
+
+            raise e
 
     # -- COMMAND HANDLERS -------------------------------------------------------------------------
 
@@ -584,8 +672,7 @@ class BybitExecutionClient(LiveExecutionClient):
 
         if order.is_closed:
             self._log.warning(
-                f"`CancelOrder` command for {command.client_order_id!r} when order already {order.status_string()} "
-                "(will not send to exchange)",
+                f"`CancelOrder` command for {command.client_order_id!r} when order already {order.status_string()} (will not send to exchange)",
             )
             return
 
@@ -702,8 +789,7 @@ class BybitExecutionClient(LiveExecutionClient):
 
         if order.is_closed:
             self._log.warning(
-                f"`ModifyOrder` command for {command.client_order_id!r} when order already {order.status_string()} "
-                "(will not send to exchange)",
+                f"`ModifyOrder` command for {command.client_order_id!r} when order already {order.status_string()} (will not send to exchange)",
             )
             return
 
@@ -739,6 +825,7 @@ class BybitExecutionClient(LiveExecutionClient):
 
     async def _submit_order(self, command: SubmitOrder) -> None:
         order = command.order
+
         if order.is_closed:
             self._log.warning(f"Order {order} is already closed")
             return
@@ -758,7 +845,7 @@ class BybitExecutionClient(LiveExecutionClient):
         async with self._retry_manager_pool as retry_manager:
             await retry_manager.run(
                 "submit_order",
-                [command.order.client_order_id],
+                [order.client_order_id],
                 self._submit_order_methods[order.order_type],
                 order,
             )
@@ -774,10 +861,11 @@ class BybitExecutionClient(LiveExecutionClient):
     async def _submit_order_list(self, command: SubmitOrderList) -> None:
         bybit_symbol = BybitSymbol(command.instrument_id.symbol.value)
         product_type = bybit_symbol.product_type
+        command_orders = command.order_list.orders
         max_batch = 20 if product_type == BybitProductType.OPTION else 10
 
-        for i in range(0, len(command.order_list.orders), max_batch):
-            batch_submits = command.order_list.orders[i : i + max_batch]
+        for i in range(0, len(command_orders), max_batch):
+            batch_submits = command_orders[i : i + max_batch]
             submit_orders: list[BybitBatchPlaceOrder] = []
 
             for order in batch_submits:
@@ -785,21 +873,13 @@ class BybitExecutionClient(LiveExecutionClient):
                     self._log.error(f"Error on {command}")
                     return  # Do not submit batch
 
-                match order.order_type:
-                    case OrderType.MARKET:
-                        batch_order = self._create_market_batch_order(order)
-                    case OrderType.LIMIT:
-                        batch_order = self._create_limit_batch_order(order)
-                    case OrderType.LIMIT_IF_TOUCHED:
-                        batch_order = self._create_limit_if_touched_batch_order(order)
-                    case OrderType.STOP_MARKET:
-                        batch_order = self._create_stop_market_batch_order(order)
-                    case OrderType.MARKET_IF_TOUCHED:
-                        batch_order = self._create_market_if_touched_batch_order(order)
-                    case _:
-                        self._log.error(f"Unsupported order type for 'submit_order_list': {order}")
-                        self._log.error(f"Error on {command}")
-                        return
+                try:
+                    batch_order = self._batch_order_create_handlers[order.order_type](order)
+                except KeyError:
+                    self._log.error(
+                        f"Error on {command} - Unsupported order type for 'submit_order_list': {order}",
+                    )
+                    return
 
                 submit_orders.append(batch_order)
 
@@ -985,7 +1065,7 @@ class BybitExecutionClient(LiveExecutionClient):
         )
 
     def _handle_ws_message_trade(self, raw: bytes) -> None:
-        pass
+        return
 
     def _handle_ws_message_private(self, raw: bytes) -> None:
         try:
@@ -1014,7 +1094,7 @@ class BybitExecutionClient(LiveExecutionClient):
             else:
                 self._log.error(f"Unknown websocket message topic: {topic}")
         except Exception as e:
-            self._log.error(f"Failed to parse websocket message: {raw.decode()} with error {e}")
+            self._log.exception(f"Failed to parse websocket message: {raw.decode()}", e)
 
     def _handle_account_execution_update(self, raw: bytes) -> None:
         try:
@@ -1047,8 +1127,8 @@ class BybitExecutionClient(LiveExecutionClient):
 
         if client_order_id is None:
             self._log.debug(
-                f"Cannot process order execution for {venue_order_id!r}: no `ClientOrderId` found "
-                "(most likely due to being an external order)",
+                f"Cannot process order execution for {venue_order_id!r}: "
+                "no `ClientOrderId` found (most likely due to being an external order)",
             )
             return
 
@@ -1069,13 +1149,21 @@ class BybitExecutionClient(LiveExecutionClient):
                 execution.side,
                 trigger_direction,
             )
+            if strategy_id is None:
+                self._log.warning(
+                    f"Cannot process order execution for {client_order_id!r}: "
+                    "no strategy ID found (most likely due to being an external order)",
+                )
+                return
         else:
             strategy_id = order.strategy_id
             order_type = order.order_type
 
         instrument = self._cache.instrument(instrument_id)
         if instrument is None:
-            raise ValueError(f"Cannot handle trade event: instrument {instrument_id} not found")
+            raise ValueError(
+                f"Cannot handle trade event: instrument {instrument_id} not found",
+            )
 
         quote_currency = instrument.quote_currency
         is_maker = execution.isMaker
@@ -1247,13 +1335,13 @@ class BybitExecutionClient(LiveExecutionClient):
                         ts_event=report.ts_last,
                     )
         except Exception as e:
-            self._log.error(repr(e))
+            self._log.exception(repr(e), e)
 
     def _handle_account_wallet_update(self, raw: bytes) -> None:
         try:
             self._process_wallet_update(raw)
         except Exception as e:
-            self._log.exception(f"Failed to handle account wallet update: {e}", e)
+            self._log.exception("Failed to handle account wallet update", e)
 
     def _process_wallet_update(self, raw: bytes) -> None:
         msg: BybitWsAccountWalletMsg = self._decoder_ws_account_wallet_update.decode(raw)

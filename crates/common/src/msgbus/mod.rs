@@ -17,6 +17,7 @@
 
 pub mod database;
 pub mod handler;
+pub mod listener;
 pub mod stubs;
 pub mod switchboard;
 
@@ -24,22 +25,48 @@ use std::{
     any::Any,
     cell::RefCell,
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::{Hash, Hasher},
     rc::Rc,
     sync::OnceLock,
 };
 
+use bytes::Bytes;
 use handler::ShareableMessageHandler;
 use indexmap::IndexMap;
 use nautilus_core::UUID4;
 use nautilus_model::{data::Data, identifiers::TraderId};
+use serde::{Deserialize, Serialize};
 use switchboard::MessagingSwitchboard;
 use ustr::Ustr;
 
 use crate::messages::data::DataResponse;
 
 pub const CLOSE_TOPIC: &str = "CLOSE";
+
+/// Represents a bus message including a topic and payload.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common")
+)]
+pub struct BusMessage {
+    /// The topic to publish on.
+    pub topic: String,
+    /// The serialized payload for the message.
+    pub payload: Bytes,
+}
+
+impl Display for BusMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}] {}",
+            self.topic,
+            String::from_utf8_lossy(&self.payload)
+        )
+    }
+}
 
 pub struct MessageBusWrapper(Rc<RefCell<MessageBus>>);
 
@@ -55,11 +82,15 @@ pub fn set_message_bus(msgbus: Rc<RefCell<MessageBus>>) {
 }
 
 pub fn get_message_bus() -> Rc<RefCell<MessageBus>> {
-    MESSAGE_BUS
-        .get()
-        .expect("Message bus should initialized be at application start")
-        .0
-        .clone()
+    if MESSAGE_BUS.get().is_none() {
+        // Initialize default message bus
+        let msgbus = MessageBus::default();
+        let msgbus = Rc::new(RefCell::new(msgbus));
+        let _ = MESSAGE_BUS.set(MessageBusWrapper(msgbus.clone()));
+        msgbus
+    } else {
+        MESSAGE_BUS.get().unwrap().0.clone()
+    }
 }
 
 pub fn send(endpoint: &Ustr, message: &dyn Any) {
@@ -159,6 +190,15 @@ pub fn unsubscribe<T: AsRef<str>>(topic: T, handler: ShareableMessageHandler) {
         .borrow_mut()
         .subscriptions
         .shift_remove(&sub);
+}
+
+pub fn is_subscribed<T: AsRef<str>>(topic: T, handler: ShareableMessageHandler) -> bool {
+    let sub = Subscription::new(topic, handler, None);
+    get_message_bus().borrow().subscriptions.contains_key(&sub)
+}
+
+pub fn subscriptions_count<T: AsRef<str>>(topic: T) -> usize {
+    get_message_bus().borrow().subscriptions_count(topic)
 }
 
 /// Represents a subscription to a particular topic.
@@ -451,7 +491,7 @@ impl MessageBus {
     /// Send a [`DataResponse`] to an endpoint that must be an actor.
     pub fn send_response(&self, message: DataResponse) {
         if let Some(handler) = self.get_endpoint(message.client_id.inner()) {
-            handler.0.handle_response(message);
+            handler.0.handle(&message);
         }
     }
 
@@ -460,7 +500,7 @@ impl MessageBus {
         let matching_subs = self.matching_subscriptions(topic);
 
         for sub in matching_subs {
-            sub.handler.0.handle_data(message.clone());
+            sub.handler.0.handle(&message);
         }
     }
 
@@ -524,13 +564,6 @@ pub(crate) mod tests {
     use super::*;
     use crate::msgbus::stubs::{get_call_check_shareable_handler, get_stub_shareable_handler};
 
-    pub fn stub_msgbus() -> Rc<RefCell<MessageBus>> {
-        let msgbus = MessageBus::new(TraderId::from("trader-001"), UUID4::new(), None, None);
-        let msgbus = Rc::new(RefCell::new(msgbus));
-        set_message_bus(msgbus.clone());
-        msgbus
-    }
-
     #[rstest]
     fn test_new() {
         let trader_id = TraderId::from("trader-001");
@@ -542,60 +575,51 @@ pub(crate) mod tests {
 
     #[rstest]
     fn test_endpoints_when_no_endpoints() {
-        let stub = stub_msgbus();
-        let msgbus = stub.borrow();
-
-        assert!(msgbus.endpoints().is_empty());
+        let msgbus = get_message_bus();
+        assert!(msgbus.borrow().endpoints().is_empty());
     }
 
     #[rstest]
     fn test_topics_when_no_subscriptions() {
-        let stub = stub_msgbus();
-        let msgbus = stub.borrow();
-
-        assert!(msgbus.topics().is_empty());
-        assert!(!msgbus.has_subscribers("my-topic"));
+        let msgbus = get_message_bus();
+        assert!(msgbus.borrow().topics().is_empty());
+        assert!(!msgbus.borrow().has_subscribers("my-topic"));
     }
 
     #[rstest]
     fn test_is_subscribed_when_no_subscriptions() {
-        let stub = stub_msgbus();
-        let msgbus = stub.borrow();
+        let msgbus = get_message_bus();
         let handler = get_stub_shareable_handler(None);
 
-        assert!(!msgbus.is_subscribed("my-topic", handler));
+        assert!(!msgbus.borrow().is_subscribed("my-topic", handler));
     }
 
     #[rstest]
     fn test_is_registered_when_no_registrations() {
-        let stub = stub_msgbus();
-        let msgbus = stub.borrow();
-
-        assert!(!msgbus.is_registered("MyEndpoint"));
+        let msgbus = get_message_bus();
+        assert!(!msgbus.borrow().is_registered("MyEndpoint"));
     }
 
     #[rstest]
     fn test_regsiter_endpoint() {
-        let stub = stub_msgbus();
+        let msgbus = get_message_bus();
         let endpoint = "MyEndpoint";
         let handler = get_stub_shareable_handler(None);
 
         register(endpoint, handler);
 
-        let msgbus = stub.borrow();
-        assert_eq!(msgbus.endpoints(), vec![endpoint.to_string()]);
-        assert!(msgbus.get_endpoint(endpoint).is_some());
+        assert_eq!(msgbus.borrow().endpoints(), vec![endpoint.to_string()]);
+        assert!(msgbus.borrow().get_endpoint(endpoint).is_some());
     }
 
     #[rstest]
     fn test_endpoint_send() {
-        let stub = stub_msgbus();
+        let msgbus = get_message_bus();
         let endpoint = Ustr::from("MyEndpoint");
         let handler = get_call_check_shareable_handler(None);
 
         register(endpoint, handler.clone());
-        let msgbus = stub.borrow();
-        assert!(msgbus.get_endpoint(endpoint).is_some());
+        assert!(msgbus.borrow().get_endpoint(endpoint).is_some());
         assert!(!check_handler_was_called(handler.clone()));
 
         // Send a message to the endpoint
@@ -605,47 +629,44 @@ pub(crate) mod tests {
 
     #[rstest]
     fn test_deregsiter_endpoint() {
-        let stub = stub_msgbus();
+        let msgbus = get_message_bus();
         let endpoint = Ustr::from("MyEndpoint");
         let handler = get_stub_shareable_handler(None);
 
         register(endpoint, handler);
         deregister(&endpoint);
 
-        let msgbus = stub.borrow();
-        assert!(msgbus.endpoints().is_empty());
+        assert!(msgbus.borrow().endpoints().is_empty());
     }
 
     #[rstest]
     fn test_subscribe() {
-        let stub = stub_msgbus();
+        let msgbus = get_message_bus();
         let topic = "my-topic";
         let handler = get_stub_shareable_handler(None);
 
         subscribe(topic, handler, Some(1));
 
-        let msgbus = stub.borrow();
-        assert!(msgbus.has_subscribers(topic));
-        assert_eq!(msgbus.topics(), vec![topic]);
+        assert!(msgbus.borrow().has_subscribers(topic));
+        assert_eq!(msgbus.borrow().topics(), vec![topic]);
     }
 
     #[rstest]
     fn test_unsubscribe() {
-        let stub = stub_msgbus();
+        let msgbus = get_message_bus();
         let topic = "my-topic";
         let handler = get_stub_shareable_handler(None);
 
         subscribe(topic, handler.clone(), None);
         unsubscribe(topic, handler);
 
-        let msgbus = stub.borrow();
-        assert!(!msgbus.has_subscribers(topic));
-        assert!(msgbus.topics().is_empty());
+        assert!(!msgbus.borrow().has_subscribers(topic));
+        assert!(msgbus.borrow().topics().is_empty());
     }
 
     #[rstest]
     fn test_matching_subscriptions() {
-        let stub = stub_msgbus();
+        let msgbus = get_message_bus();
         let topic = "my-topic";
 
         let handler_id1 = Ustr::from("1");
@@ -666,8 +687,7 @@ pub(crate) mod tests {
         subscribe(topic, handler4, Some(2));
         let topic = Ustr::from(topic);
 
-        let msgbus = stub.borrow();
-        let subs = msgbus.matching_subscriptions(&topic);
+        let subs = msgbus.borrow().matching_subscriptions(&topic);
         assert_eq!(subs.len(), 4);
         assert_eq!(subs[0].handler_id, handler_id4);
         assert_eq!(subs[1].handler_id, handler_id3);

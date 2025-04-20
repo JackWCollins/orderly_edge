@@ -33,6 +33,7 @@ from typing import Callable
 
 from nautilus_trader.common.enums import LogColor
 from nautilus_trader.common.enums import UpdateCatalogMode
+from nautilus_trader.core import nautilus_pyo3
 from nautilus_trader.core.datetime import max_date
 from nautilus_trader.core.datetime import min_date
 from nautilus_trader.core.datetime import time_object_to_dt
@@ -80,19 +81,23 @@ from nautilus_trader.data.messages cimport RequestQuoteTicks
 from nautilus_trader.data.messages cimport RequestTradeTicks
 from nautilus_trader.data.messages cimport SubscribeBars
 from nautilus_trader.data.messages cimport SubscribeData
+from nautilus_trader.data.messages cimport SubscribeIndexPrices
 from nautilus_trader.data.messages cimport SubscribeInstrument
 from nautilus_trader.data.messages cimport SubscribeInstrumentClose
 from nautilus_trader.data.messages cimport SubscribeInstruments
 from nautilus_trader.data.messages cimport SubscribeInstrumentStatus
+from nautilus_trader.data.messages cimport SubscribeMarkPrices
 from nautilus_trader.data.messages cimport SubscribeOrderBook
 from nautilus_trader.data.messages cimport SubscribeQuoteTicks
 from nautilus_trader.data.messages cimport SubscribeTradeTicks
 from nautilus_trader.data.messages cimport UnsubscribeBars
 from nautilus_trader.data.messages cimport UnsubscribeData
+from nautilus_trader.data.messages cimport UnsubscribeIndexPrices
 from nautilus_trader.data.messages cimport UnsubscribeInstrument
 from nautilus_trader.data.messages cimport UnsubscribeInstrumentClose
 from nautilus_trader.data.messages cimport UnsubscribeInstruments
 from nautilus_trader.data.messages cimport UnsubscribeInstrumentStatus
+from nautilus_trader.data.messages cimport UnsubscribeMarkPrices
 from nautilus_trader.data.messages cimport UnsubscribeOrderBook
 from nautilus_trader.data.messages cimport UnsubscribeQuoteTicks
 from nautilus_trader.data.messages cimport UnsubscribeTradeTicks
@@ -102,8 +107,10 @@ from nautilus_trader.model.data cimport BarAggregation
 from nautilus_trader.model.data cimport BarType
 from nautilus_trader.model.data cimport CustomData
 from nautilus_trader.model.data cimport DataType
+from nautilus_trader.model.data cimport IndexPriceUpdate
 from nautilus_trader.model.data cimport InstrumentClose
 from nautilus_trader.model.data cimport InstrumentStatus
+from nautilus_trader.model.data cimport MarkPriceUpdate
 from nautilus_trader.model.data cimport OrderBookDelta
 from nautilus_trader.model.data cimport OrderBookDeltas
 from nautilus_trader.model.data cimport OrderBookDepth10
@@ -244,9 +251,11 @@ cdef class DataEngine(Component):
 
         """
         cdef DataClient client
+
         for client in self._clients.values():
             if not client.is_connected:
                 return False
+
         return True
 
     cpdef bint check_disconnected(self):
@@ -260,9 +269,11 @@ cdef class DataEngine(Component):
 
         """
         cdef DataClient client
+
         for client in self._clients.values():
             if client.is_connected:
                 return False
+
         return True
 
 # --REGISTRATION ----------------------------------------------------------------------------------
@@ -329,7 +340,6 @@ cdef class DataEngine(Component):
         Condition.not_none(client, "client")
 
         self._default_client = client
-
         self._log.info(f"Registered {client} for default routing")
 
     cpdef void register_venue_routing(self, DataClient client, Venue venue):
@@ -354,7 +364,6 @@ cdef class DataEngine(Component):
             self._clients[client.id] = client
 
         self._routing_map[venue] = client
-
         self._log.info(f"Registered DataClient-{client} for routing to {venue}")
 
     cpdef void deregister_client(self, DataClient client):
@@ -386,8 +395,10 @@ cdef class DataEngine(Component):
         """
         cdef list subscriptions = []
         cdef DataClient client
+
         for client in self._clients.values():
             subscriptions += client.subscribed_custom_data()
+
         return subscriptions
 
     cpdef list subscribed_instruments(self):
@@ -401,8 +412,10 @@ cdef class DataEngine(Component):
         """
         cdef list subscriptions = []
         cdef MarketDataClient client
+
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_instruments()
+
         return subscriptions
 
     cpdef list subscribed_order_book_deltas(self):
@@ -416,8 +429,10 @@ cdef class DataEngine(Component):
         """
         cdef list subscriptions = []
         cdef MarketDataClient client
+
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_order_book_deltas()
+
         return subscriptions
 
     cpdef list subscribed_order_book_snapshots(self):
@@ -431,8 +446,10 @@ cdef class DataEngine(Component):
         """
         cdef list subscriptions = []
         cdef MarketDataClient client
+
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_order_book_snapshots()
+
         return subscriptions
 
     cpdef list subscribed_quote_ticks(self):
@@ -446,8 +463,10 @@ cdef class DataEngine(Component):
         """
         cdef list subscriptions = []
         cdef MarketDataClient client
+
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_quote_ticks()
+
         return subscriptions
 
     cpdef list subscribed_trade_ticks(self):
@@ -460,9 +479,45 @@ cdef class DataEngine(Component):
 
         """
         cdef list subscriptions = []
+
         cdef MarketDataClient client
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_trade_ticks()
+
+        return subscriptions
+
+    cpdef list subscribed_mark_prices(self):
+        """
+        Return the mark price update instruments subscribed to.
+
+        Returns
+        -------
+        list[InstrumentId]
+
+        """
+        cdef list subscriptions = []
+
+        cdef MarketDataClient client
+        for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
+            subscriptions += client.subscribed_mark_prices()
+
+        return subscriptions
+
+    cpdef list subscribed_index_prices(self):
+        """
+        Return the index price update instruments subscribed to.
+
+        Returns
+        -------
+        list[InstrumentId]
+
+        """
+        cdef list subscriptions = []
+
+        cdef MarketDataClient client
+        for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
+            subscriptions += client.subscribed_index_prices()
+
         return subscriptions
 
     cpdef list subscribed_bars(self):
@@ -475,9 +530,11 @@ cdef class DataEngine(Component):
 
         """
         cdef list subscriptions = []
+
         cdef MarketDataClient client
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_bars()
+
         return subscriptions + list(self._bar_aggregators.keys())
 
     cpdef list subscribed_instrument_status(self):
@@ -490,9 +547,11 @@ cdef class DataEngine(Component):
 
         """
         cdef list subscriptions = []
+
         cdef MarketDataClient client
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_instrument_status()
+
         return subscriptions
 
     cpdef list subscribed_instrument_close(self):
@@ -505,9 +564,11 @@ cdef class DataEngine(Component):
 
         """
         cdef list subscriptions = []
+
         cdef MarketDataClient client
         for client in [c for c in self._clients.values() if isinstance(c, MarketDataClient)]:
             subscriptions += client.subscribed_instrument_close()
+
         return subscriptions
 
     cpdef list subscribed_synthetic_quotes(self):
@@ -657,6 +718,7 @@ cdef class DataEngine(Component):
     cpdef void _execute_command(self, DataCommand command):
         if self.debug:
             self._log.debug(f"{RECV}{CMD} {command}", LogColor.MAGENTA)
+
         self.command_count += 1
 
         if command.client_id in self._external_clients:
@@ -702,6 +764,10 @@ cdef class DataEngine(Component):
             self._handle_subscribe_quote_ticks(client, command)
         elif isinstance(command, SubscribeTradeTicks):
             self._handle_subscribe_trade_ticks(client, command)
+        elif isinstance(command, SubscribeMarkPrices):
+            self._handle_subscribe_mark_prices(client, command)
+        elif isinstance(command, SubscribeIndexPrices):
+            self._handle_subscribe_index_prices(client, command)
         elif isinstance(command, SubscribeBars):
             self._handle_subscribe_bars(client, command)
         elif isinstance(command, SubscribeInstrumentStatus):
@@ -725,6 +791,10 @@ cdef class DataEngine(Component):
             self._handle_unsubscribe_quote_ticks(client, command)
         elif isinstance(command, UnsubscribeTradeTicks):
             self._handle_unsubscribe_trade_ticks(client, command)
+        elif isinstance(command, UnsubscribeMarkPrices):
+            self._handle_unsubscribe_mark_prices(client, command)
+        elif isinstance(command, UnsubscribeIndexPrices):
+            self._handle_unsubscribe_index_prices(client, command)
         elif isinstance(command, UnsubscribeBars):
             self._handle_unsubscribe_bars(client, command)
         elif isinstance(command, UnsubscribeInstrumentStatus):
@@ -816,8 +886,8 @@ cdef class DataEngine(Component):
         Condition.not_none(command.params, "params")
 
         cdef bint only_deltas = command.data_type.type == OrderBookDelta
-
         cdef Instrument instrument = self._cache.instrument(command.instrument_id)
+
         if instrument is None:
             self._log.warning(
                 f"No instrument found for {command.instrument_id} on order book data subscription"
@@ -831,6 +901,7 @@ cdef class DataEngine(Component):
             if command.instrument_id.symbol.is_composite():
                 root = command.instrument_id.symbol.root()
                 instruments = self._cache.instruments(venue=command.instrument_id.venue, underlying=root)
+
                 for instrument in instruments:
                     self._create_new_book(instrument.id, command.book_type)
             else:
@@ -843,6 +914,7 @@ cdef class DataEngine(Component):
         except NotImplementedError:
             if only_deltas:
                 raise
+
             if command.instrument_id not in client.subscribed_order_book_snapshots():
                 client.subscribe_order_book_snapshots(command)
 
@@ -885,6 +957,7 @@ cdef class DataEngine(Component):
         if command.instrument_id.is_synthetic():
             self._handle_subscribe_synthetic_quote_ticks(command.instrument_id)
             return
+
         Condition.not_none(client, "client")
 
         if "start" not in command.params:
@@ -917,10 +990,13 @@ cdef class DataEngine(Component):
             list synthetics_for_feed
         for component_instrument_id in synthetic.components:
             synthetics_for_feed = self._synthetic_quote_feeds.get(component_instrument_id)
+
             if synthetics_for_feed is None:
                 synthetics_for_feed = []
+
             if synthetic in synthetics_for_feed:
                 continue
+
             synthetics_for_feed.append(synthetic)
             self._synthetic_quote_feeds[component_instrument_id] = synthetics_for_feed
 
@@ -962,14 +1038,31 @@ cdef class DataEngine(Component):
             list synthetics_for_feed
         for component_instrument_id in synthetic.components:
             synthetics_for_feed = self._synthetic_trade_feeds.get(component_instrument_id)
+
             if synthetics_for_feed is None:
                 synthetics_for_feed = []
+
             if synthetic in synthetics_for_feed:
                 continue
+
             synthetics_for_feed.append(synthetic)
             self._synthetic_trade_feeds[component_instrument_id] = synthetics_for_feed
 
         self._subscribed_synthetic_trades.append(instrument_id)
+
+    cpdef void _handle_subscribe_mark_prices(self, MarketDataClient client, SubscribeMarkPrices command):
+        Condition.not_none(client, "client")
+        Condition.not_none(command.instrument_id, "instrument_id")
+
+        if command.instrument_id not in client.subscribed_mark_prices():
+            client.subscribe_mark_prices(command)
+
+    cpdef void _handle_subscribe_index_prices(self, MarketDataClient client, SubscribeIndexPrices command):
+        Condition.not_none(client, "client")
+        Condition.not_none(command.instrument_id, "instrument_id")
+
+        if command.instrument_id not in client.subscribed_index_prices():
+            client.subscribe_index_prices(command)
 
     cpdef void _handle_subscribe_bars(self, MarketDataClient client, SubscribeBars command):
         Condition.not_none(client, "client")
@@ -1069,7 +1162,6 @@ cdef class DataEngine(Component):
             return
 
         cdef str topic = f"data.book.deltas.{command.instrument_id.venue}.{command.instrument_id.symbol.topic()}"
-
         cdef int num_subscribers = len(self._msgbus.subscriptions(pattern=topic))
         cdef bint is_internal_book_subscriber = self._msgbus.is_subscribed(
             topic=topic,
@@ -1102,7 +1194,6 @@ cdef class DataEngine(Component):
 
         # Check the deltas and the depth subscription
         cdef list[str] topics = [deltas_topic, depth_topic]
-
         cdef int num_subscribers = 0
         cdef bint is_internal_book_subscriber = False
 
@@ -1149,6 +1240,28 @@ cdef class DataEngine(Component):
         ):
             if command.instrument_id in client.subscribed_trade_ticks():
                 client.unsubscribe_trade_ticks(command)
+
+    cpdef void _handle_unsubscribe_mark_prices(self, MarketDataClient client, UnsubscribeMarkPrices command):
+        Condition.not_none(client, "client")
+
+        if not self._msgbus.has_subscribers(
+            f"data.mark_prices"
+            f".{command.instrument_id.venue}"
+            f".{command.instrument_id.symbol}",
+        ):
+            if command.instrument_id in client.subscribed_mark_prices():
+                client.unsubscribe_mark_prices(command)
+
+    cpdef void _handle_unsubscribe_index_prices(self, MarketDataClient client, UnsubscribeIndexPrices command):
+        Condition.not_none(client, "client")
+
+        if not self._msgbus.has_subscribers(
+            f"data.index_prices"
+            f".{command.instrument_id.venue}"
+            f".{command.instrument_id.symbol}",
+        ):
+            if command.instrument_id in client.subscribed_index_prices():
+                client.unsubscribe_index_prices(command)
 
     cpdef void _handle_unsubscribe_bars(self, MarketDataClient client, UnsubscribeBars command):
         Condition.not_none(client, "client")
@@ -1234,15 +1347,18 @@ cdef class DataEngine(Component):
     cpdef void _handle_request(self, RequestData request):
         if self.debug:
             self._log.debug(f"{RECV}{REQ} {request}", LogColor.MAGENTA)
+
         self.request_count += 1
 
         # Query data client
         cdef DataClient client = self._clients.get(request.client_id)
+
         if client is None:
             client = self._routing_map.get(
                 request.venue,
                 self._default_client,
             )
+
         if client is not None:
             Condition.is_true(isinstance(client, DataClient), "client was not a DataClient")
 
@@ -1270,6 +1386,7 @@ cdef class DataEngine(Component):
 
     cpdef void _handle_request_instruments(self, DataClient client, RequestInstruments request):
         update_catalog_mode = request.params.get("update_catalog_mode", None)
+
         if self._catalogs and update_catalog_mode is None:
             self._query_catalog(request)
             return
@@ -1338,12 +1455,12 @@ cdef class DataEngine(Component):
         datetime start_catalog,
         datetime end_catalog,
     ):
-        # no catalog to use
+        # No catalog to use
         if start_catalog is None:
             self._date_range_client_request(client, request)
             return
 
-        # caping dates to the now datetime
+        # Capping dates to the now datetime
         cdef datetime now = self._clock.utc_now()
         cdef datetime used_start_catalog = min_date(start_catalog, now)
         cdef datetime used_end_catalog = min_date(end_catalog, now)
@@ -1354,7 +1471,7 @@ cdef class DataEngine(Component):
             self._log.error(f"Cannot handle request: incompatible request dates for {request}")
             return
 
-        # if the request dates are fully outside the catalog dates
+        # If the request dates are fully outside the catalog dates
         if used_end_request < used_start_catalog:
             self._date_range_client_request(client, request)
             return
@@ -1363,9 +1480,10 @@ cdef class DataEngine(Component):
             self._date_range_client_request(client, request)
             return
 
-        # from here the request dates have an intersection with the catalog
-        # number of requests for the request group that will wait for all requests to be completed
-        n_requests = 1 # one request at least for the catalog
+        # From here the request dates have an intersection with the catalog
+        # Number of requests for the request group that will wait for all requests to be completed.
+        # One request at least for the catalog
+        n_requests = 1
 
         if used_start_request < used_start_catalog and client is not None:
             n_requests += 1
@@ -1375,7 +1493,7 @@ cdef class DataEngine(Component):
 
         self._new_query_group(request.id, n_requests)
 
-        # client query before the catalog
+        # Client query before the catalog
         if used_start_request < used_start_catalog and client is not None:
             new_request = request.with_dates(used_start_request, used_start_catalog)
             new_request.params["update_catalog_mode"] = self._convert_update_catalog_mode(
@@ -1384,7 +1502,7 @@ cdef class DataEngine(Component):
             )
             self._date_range_client_request(client, new_request)
 
-        # catalog query
+        # Catalog query
         new_request = request.with_dates(max_date(used_start_request, used_start_catalog), min_date(used_end_request, used_end_catalog))
         new_request.params["update_catalog_mode"] = self._convert_update_catalog_mode(
             new_request.params.get("update_catalog_mode", None),
@@ -1392,7 +1510,7 @@ cdef class DataEngine(Component):
         )
         self._query_catalog(new_request)
 
-        # client query after the catalog
+        # Client query after the catalog
         if used_end_request > used_end_catalog and client is not None:
             new_request = request.with_dates(used_end_catalog, used_end_request)
             new_request.params["update_catalog_mode"] = self._convert_update_catalog_mode(
@@ -1574,6 +1692,10 @@ cdef class DataEngine(Component):
             self._handle_quote_tick(data)
         elif isinstance(data, TradeTick):
             self._handle_trade_tick(data)
+        elif isinstance(data, MarkPriceUpdate):
+            self._handle_mark_price(data)
+        elif isinstance(data, IndexPriceUpdate):
+            self._handle_index_price(data)
         elif isinstance(data, Bar):
             self._handle_bar(data)
         elif isinstance(data, Instrument):
@@ -1688,6 +1810,7 @@ cdef class DataEngine(Component):
 
         # Handle synthetics update
         cdef list synthetics = self._synthetic_quote_feeds.get(tick.instrument_id)
+
         if synthetics is not None:
             self._update_synthetics_with_quote(synthetics, tick)
 
@@ -1703,6 +1826,7 @@ cdef class DataEngine(Component):
 
         # Handle synthetics update
         cdef list synthetics = self._synthetic_trade_feeds.get(tick.instrument_id)
+
         if synthetics is not None:
             self._update_synthetics_with_trade(synthetics, tick)
 
@@ -1713,9 +1837,28 @@ cdef class DataEngine(Component):
             msg=tick,
         )
 
+    cpdef void _handle_mark_price(self, MarkPriceUpdate mark_price):
+        self._cache.add_mark_price(mark_price)
+
+        self._msgbus.publish_c(
+            topic=f"data.mark_prices"
+                  f".{mark_price.instrument_id.venue}"
+                  f".{mark_price.instrument_id.symbol}",
+            msg=mark_price,
+        )
+
+    cpdef void _handle_index_price(self, IndexPriceUpdate index_price):
+        self._cache.add_index_price(index_price)
+
+        self._msgbus.publish_c(
+            topic=f"data.index_prices"
+                  f".{index_price.instrument_id.venue}"
+                  f".{index_price.instrument_id.symbol}",
+            msg=index_price,
+        )
+
     cpdef void _handle_bar(self, Bar bar):
         cdef BarType bar_type = bar.bar_type
-
         cdef:
             Bar cached_bar
             Bar last_bar
@@ -1723,17 +1866,20 @@ cdef class DataEngine(Component):
             int i
         if self._validate_data_sequence:
             last_bar = self._cache.bar(bar_type)
+
             if last_bar is not None:
                 if bar.ts_event < last_bar.ts_event:
                     self._log.warning(
                         f"Bar {bar} was prior to last bar `ts_event` {last_bar.ts_event}",
                     )
                     return  # `bar` is out of sequence
+
                 if bar.ts_init < last_bar.ts_init:
                     self._log.warning(
                         f"Bar {bar} was prior to last bar `ts_init` {last_bar.ts_init}",
                     )
                     return  # `bar` is out of sequence
+
                 if bar.is_revision:
                     if bar.ts_event == last_bar.ts_event:
                         # Replace `last_bar`, previously cached bar will fall out of scope
@@ -1766,15 +1912,18 @@ cdef class DataEngine(Component):
     cpdef void _handle_response(self, DataResponse response):
         if self.debug:
             self._log.debug(f"{RECV}{RES} {response}", LogColor.MAGENTA)
+
         self.response_count += 1
 
         # We may need to join responses from a catalog and a client
         response_2 = self._handle_query_group(response)
+
         if response_2 is None:
             return
 
         if response_2.data_type.type == Instrument:
             update_catalog_mode = response_2.params.get("update_catalog_mode", None)
+
             if isinstance(response_2.data, list):
                 self._handle_instruments(response_2.data, update_catalog_mode)
             else:
@@ -1814,9 +1963,12 @@ cdef class DataEngine(Component):
 
         if correlation_id not in self._query_group_n_components or self._query_group_n_components[correlation_id] == 1:
             update_catalog_mode = response.params.get("update_catalog_mode", None)
+
             if update_catalog_mode is not None:
                 self._update_catalog(response.data, update_catalog_mode)
+
             self._query_group_n_components.pop(correlation_id, None)
+
             return response
 
         if correlation_id not in self._query_group_components:
@@ -1880,7 +2032,7 @@ cdef class DataEngine(Component):
             return
 
         if timestamp_bound_catalog is None and len(self._catalogs) > 0:
-            # if more than one catalog exists, the first declared one is the default one
+            # If more than one catalog exists, the first declared one is the default one
             last_timestamp_catalog = list(self._catalogs.values())[0]
 
         if timestamp_bound_catalog is not None:
@@ -1903,6 +2055,7 @@ cdef class DataEngine(Component):
         self._cache.add_bars(bars)
 
         cdef BarAggregator aggregator
+
         if partial is not None and partial.bar_type.is_internally_aggregated():
             # Update partial time bar
             aggregator = self._bar_aggregators.get(partial.bar_type)
@@ -1949,6 +2102,7 @@ cdef class DataEngine(Component):
                 aggregator = self._bar_aggregators[bar_type.standard()]
             else:
                 instrument = self._cache.instrument(params["bar_type"].instrument_id)
+
                 if instrument is None:
                     self._log.error(
                         f"Cannot start bar aggregation: "
@@ -1957,6 +2111,7 @@ cdef class DataEngine(Component):
                     continue
 
                 aggregator = self._create_bar_aggregator(instrument, bar_type)
+
                 if params["update_subscriptions"]:
                     self._bar_aggregators[bar_type.standard()] = aggregator
 
@@ -2009,6 +2164,7 @@ cdef class DataEngine(Component):
 
     cpdef void _update_order_book(self, Data data):
         cdef OrderBook order_book = self._cache.order_book(data.instrument_id)
+
         if order_book is None:
             return
 
@@ -2019,6 +2175,7 @@ cdef class DataEngine(Component):
             self._log.debug(f"Received snapshot event for {snap_event}", LogColor.MAGENTA)
 
         cdef SnapshotInfo snap_info = self._snapshot_info.get(snap_event.name)
+
         if snap_info is None:
             self._log.error(f"No `SnapshotInfo` found for snapshot event {snap_event}")
             return
@@ -2028,6 +2185,7 @@ cdef class DataEngine(Component):
             Instrument instrument
         if snap_info.is_composite:
             instruments = self._cache.instruments(venue=snap_info.venue, underlying=snap_info.root)
+
             for instrument in instruments:
                 self._publish_order_book(instrument.id, snap_info.topic)
         else:
@@ -2035,6 +2193,7 @@ cdef class DataEngine(Component):
 
     cpdef void _publish_order_book(self, InstrumentId instrument_id, str topic):
         cdef OrderBook order_book = self._cache.order_book(instrument_id)
+
         if order_book is None:
             self._log.error(
                 f"Cannot snapshot orderbook: "
@@ -2170,6 +2329,7 @@ cdef class DataEngine(Component):
 
     cpdef void _stop_bar_aggregator(self, MarketDataClient client, UnsubscribeBars command):
         cdef aggregator = self._bar_aggregators.get(command.bar_type.standard())
+
         if aggregator is None:
             self._log.warning(
                 f"Cannot stop bar aggregator: "
@@ -2235,6 +2395,7 @@ cdef class DataEngine(Component):
 
     cpdef void _update_synthetics_with_quote(self, list synthetics, QuoteTick update):
         cdef SyntheticInstrument synthetic
+
         for synthetic in synthetics:
             self._update_synthetic_with_quote(synthetic, update)
 
@@ -2242,7 +2403,6 @@ cdef class DataEngine(Component):
         cdef list components = synthetic.components
         cdef list[double] inputs_bid = []
         cdef list[double] inputs_ask = []
-
         cdef:
             InstrumentId instrument_id
             QuoteTick component_quote
@@ -2255,13 +2415,16 @@ cdef class DataEngine(Component):
                 inputs_bid.append(update_bid.as_f64_c())
                 inputs_ask.append(update_ask.as_f64_c())
                 continue
+
             component_quote = self._cache.quote_tick(instrument_id)
+
             if component_quote is None:
                 self._log.warning(
                     f"Cannot calculate synthetic instrument {synthetic.id} price, "
                     f"no quotes for {instrument_id} yet",
                 )
                 return
+
             update_bid = component_quote.bid_price
             update_ask = component_quote.ask_price
             inputs_bid.append(update_bid.as_f64_c())
@@ -2270,7 +2433,6 @@ cdef class DataEngine(Component):
         cdef Price bid_price = synthetic.calculate(inputs_bid)
         cdef Price ask_price = synthetic.calculate(inputs_ask)
         cdef Quantity size_one = Quantity(1, 0)  # Placeholder for now
-
         cdef InstrumentId synthetic_instrument_id = synthetic.id
         cdef QuoteTick synthetic_quote = QuoteTick(
             synthetic_instrument_id,
@@ -2291,6 +2453,7 @@ cdef class DataEngine(Component):
 
     cpdef void _update_synthetics_with_trade(self, list synthetics, TradeTick update):
         cdef SyntheticInstrument synthetic
+
         for synthetic in synthetics:
             self._update_synthetic_with_trade(synthetic, update)
 
@@ -2307,19 +2470,21 @@ cdef class DataEngine(Component):
                 update_price = update.price
                 inputs.append(update_price.as_f64_c())
                 continue
+
             component_trade = self._cache.trade_tick(instrument_id)
+
             if component_trade is None:
                 self._log.warning(
                     f"Cannot calculate synthetic instrument {synthetic.id} price, "
                     f"no trades for {instrument_id} yet",
                 )
                 return
+
             update_price = component_trade.price
             inputs.append(update_price.as_f64_c())
 
         cdef Price price = synthetic.calculate(inputs)
         cdef Quantity size_one = Quantity(1, 0)  # Placeholder for now
-
         cdef InstrumentId synthetic_instrument_id = synthetic.id
         cdef TradeTick synthetic_trade = TradeTick(
             synthetic_instrument_id,

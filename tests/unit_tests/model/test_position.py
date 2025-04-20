@@ -267,7 +267,7 @@ class TestPosition:
         [
             [
                 OrderSide.BUY,
-                OrderSide.SELL,  # <--- Different side
+                OrderSide.SELL,  # <-- Different side
                 Price.from_str("1.00001"),
                 Price.from_str("1.00001"),
                 Quantity.from_str("1"),
@@ -275,7 +275,7 @@ class TestPosition:
             ],
             [
                 OrderSide.BUY,
-                OrderSide.SELL,  # <--- Different side
+                OrderSide.SELL,  # <-- Different side
                 Price.from_str("1.00001"),
                 Price.from_str("1.00001"),
                 Quantity.from_str("1"),
@@ -283,7 +283,7 @@ class TestPosition:
             ],
             [
                 OrderSide.BUY,
-                OrderSide.SELL,  # <--- Different side
+                OrderSide.SELL,  # <-- Different side
                 Price.from_str("1.00001"),
                 Price.from_str("1.00001"),
                 Quantity.from_str("1"),
@@ -392,6 +392,7 @@ class TestPosition:
         assert position.quantity == Quantity.from_int(100_000)
         assert position.peak_qty == Quantity.from_int(100_000)
         assert position.size_precision == 0
+        assert position.closing_order_side() == OrderSide.SELL
         assert position.signed_decimal_qty() == Decimal("100000")
         assert position.signed_qty == 100_000.0
         assert position.entry == OrderSide.BUY
@@ -442,6 +443,7 @@ class TestPosition:
         assert position.quantity == Quantity.from_int(100_000)
         assert position.peak_qty == Quantity.from_int(100_000)
         assert position.size_precision == 0
+        assert position.closing_order_side() == OrderSide.BUY
         assert position.signed_decimal_qty() == Decimal("-100000")
         assert position.signed_qty == -100_000.0
         assert position.side == PositionSide.SHORT
@@ -567,7 +569,7 @@ class TestPosition:
             position_id=PositionId("P-123456"),
             strategy_id=StrategyId("S-001"),
             last_px=Price.from_str("1.00001"),
-            ts_filled_ns=1_000_000_000,
+            ts_event=1_000_000_000,
         )
 
         position = Position(instrument=AUDUSD_SIM, fill=fill1)
@@ -934,7 +936,7 @@ class TestPosition:
             position_id=PositionId("P-123456"),
             strategy_id=StrategyId("S-001"),
             last_px=Price.from_str("1.00001"),
-            ts_filled_ns=1_000_000_000,
+            ts_event=1_000_000_000,
         )
 
         position = Position(instrument=AUDUSD_SIM, fill=fill1)
@@ -1527,3 +1529,47 @@ class TestPosition:
         # Assert
         assert position.signed_qty == expected_signed_qty
         assert position.signed_decimal_qty() == expected_decimal_qty
+
+    def test_purge_order_events(self) -> None:
+        # Arrange
+        order1 = self.order_factory.market(
+            BTCUSDT_BINANCE.id,
+            OrderSide.BUY,
+            Quantity.from_str("2.000000"),
+        )
+
+        order2 = self.order_factory.market(
+            BTCUSDT_BINANCE.id,
+            OrderSide.BUY,
+            Quantity.from_str("2.000000"),
+        )
+
+        fill1 = TestEventStubs.order_filled(
+            order1,
+            instrument=BTCUSDT_BINANCE,
+            position_id=PositionId("P-123456"),
+            strategy_id=StrategyId("S-001"),
+            last_px=Price.from_str("10500.00"),
+        )
+
+        fill2 = TestEventStubs.order_filled(
+            order2,
+            instrument=BTCUSDT_BINANCE,
+            position_id=PositionId("P-123456"),
+            strategy_id=StrategyId("S-001"),
+            last_px=Price.from_str("10500.00"),
+        )
+
+        position = Position(instrument=BTCUSDT_BINANCE, fill=fill1)
+        position.apply(fill2)
+
+        # Act
+        position.purge_events_for_order(fill1.client_order_id)
+
+        # Assert
+        assert len(position.events) == 1
+        assert len(position.trade_ids) == 1
+        assert fill1 not in position.events
+        assert fill2 in position.events
+        assert fill1.trade_id not in position.trade_ids
+        assert fill2.trade_id in position.trade_ids

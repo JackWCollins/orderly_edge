@@ -144,8 +144,8 @@ impl CryptoFuture {
             stringify!(size_precision),
             stringify!(size_increment.precision),
         )?;
-        check_positive_price(price_increment.raw, stringify!(price_increment.raw))?;
-        check_positive_quantity(size_increment.raw, stringify!(size_increment.raw))?;
+        check_positive_price(price_increment, stringify!(price_increment))?;
+        check_positive_quantity(size_increment, stringify!(size_increment))?;
 
         Ok(Self {
             id,
@@ -279,7 +279,7 @@ impl Instrument for CryptoFuture {
     }
 
     fn base_currency(&self) -> Option<Currency> {
-        None
+        Some(self.underlying)
     }
 
     fn quote_currency(&self) -> Currency {

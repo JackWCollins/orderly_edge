@@ -22,7 +22,6 @@ https://binance-docs.github.io/apidocs/futures/en/#public-endpoints-info
 
 """
 
-
 from enum import Enum
 from enum import unique
 
@@ -136,6 +135,7 @@ class BinanceSymbolFilterType(Enum):
     MAX_NUM_ICEBERG_ORDERS = "MAX_NUM_ICEBERG_ORDERS"
     MAX_POSITION = "MAX_POSITION"
     TRAILING_DELTA = "TRAILING_DELTA"
+    POSITION_RISK_CONTROL = "POSITION_RISK_CONTROL"
 
 
 @unique
@@ -230,7 +230,7 @@ class BinanceTimeInForce(Enum):
     GTC = "GTC"
     IOC = "IOC"
     FOK = "FOK"
-    GTX = "GTX"  # FUTURES only, Good-Till-Crossing (Post Only)
+    GTX = "GTX"  # FUTURES only, Good Till Crossing (Post Only)
     GTD = "GTD"  # FUTURES only
     GTE_GTC = "GTE_GTC"  # Undocumented
 

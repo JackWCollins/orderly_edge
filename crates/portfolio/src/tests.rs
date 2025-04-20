@@ -15,7 +15,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use nautilus_common::{cache::Cache, clock::TestClock, msgbus::MessageBus};
+use nautilus_common::{cache::Cache, clock::TestClock};
 use nautilus_core::{UUID4, UnixNanos};
 use nautilus_model::{
     data::{Bar, BarType, QuoteTick},
@@ -31,7 +31,7 @@ use nautilus_model::{
         stubs::{account_id, uuid4},
     },
     instruments::{
-        CryptoPerpetual, CurrencyPair, InstrumentAny,
+        CryptoPerpetual, CurrencyPair, Instrument, InstrumentAny,
         stubs::{audusd_sim, currency_pair_btcusdt, default_fx_ccy, ethusdt_bitmex},
     },
     orders::{Order, OrderAny, OrderTestBuilder},
@@ -42,11 +42,6 @@ use rstest::{fixture, rstest};
 use rust_decimal::{Decimal, prelude::FromPrimitive};
 
 use crate::portfolio::Portfolio;
-
-#[fixture]
-fn msgbus() -> Rc<RefCell<MessageBus>> {
-    MessageBus::default().register_message_bus()
-}
 
 #[fixture]
 fn simple_cache() -> Cache {
@@ -88,7 +83,6 @@ fn instrument_ethusdt(ethusdt_bitmex: CryptoPerpetual) -> InstrumentAny {
 
 #[fixture]
 fn portfolio(
-    msgbus: Rc<RefCell<MessageBus>>,
     mut simple_cache: Cache,
     clock: TestClock,
     instrument_audusd: InstrumentAny,
@@ -102,7 +96,6 @@ fn portfolio(
     simple_cache.add_instrument(instrument_ethusdt).unwrap();
 
     Portfolio::new(
-        msgbus,
         Rc::new(RefCell::new(simple_cache)),
         Rc::new(RefCell::new(clock)),
         None,
@@ -498,12 +491,10 @@ fn test_exceed_free_balance_single_currency_raises_account_balance_negative_exce
         .add_order(order.clone(), None, None, false)
         .unwrap();
 
-    let order_submitted = submit_order(&order);
-    order
-        .apply(OrderEventAny::Submitted(order_submitted))
-        .unwrap();
+    let submitted = submit_order(&order);
+    order.apply(OrderEventAny::Submitted(submitted)).unwrap();
 
-    portfolio.update_order(&OrderEventAny::Submitted(order_submitted));
+    portfolio.update_order(&OrderEventAny::Submitted(submitted));
 
     let order_filled = fill_order(&order);
     order.apply(OrderEventAny::Filled(order_filled)).unwrap();
@@ -1011,7 +1002,7 @@ fn test_opening_one_short_position_updates_portfolio(
         .quantity(Quantity::from("2"))
         .build();
 
-    let fill = OrderFilled::new(
+    let filled = OrderFilled::new(
         order.trader_id(),
         order.strategy_id(),
         order.instrument_id(),
@@ -1039,7 +1030,7 @@ fn test_opening_one_short_position_updates_portfolio(
     portfolio.cache.borrow_mut().add_quote(last).unwrap();
     portfolio.update_quote_tick(&last);
 
-    let position = Position::new(&instrument_audusd, fill);
+    let position = Position::new(&instrument_audusd, filled);
 
     // Act
     portfolio
@@ -1133,7 +1124,7 @@ fn test_opening_positions_with_multi_asset_account(
         .quantity(Quantity::from("10000"))
         .build();
 
-    let fill = OrderFilled::new(
+    let filled = OrderFilled::new(
         order.trader_id(),
         order.strategy_id(),
         order.instrument_id(),
@@ -1155,7 +1146,7 @@ fn test_opening_positions_with_multi_asset_account(
         Some(Money::from("12.2 USD")),
     );
 
-    let position = Position::new(&instrument_ethusdt, fill);
+    let position = Position::new(&instrument_ethusdt, filled);
 
     // Act
     portfolio
@@ -1219,7 +1210,7 @@ fn test_market_value_when_insufficient_data_for_xrate_returns_none(
         .quantity(Quantity::from("100"))
         .build();
 
-    let fill = OrderFilled::new(
+    let filled = OrderFilled::new(
         order.trader_id(),
         order.strategy_id(),
         order.instrument_id(),
@@ -1244,7 +1235,7 @@ fn test_market_value_when_insufficient_data_for_xrate_returns_none(
     let last_ethusd = get_quote_tick(&instrument_ethusdt, 376.05, 377.10, 16.0, 25.0);
     let last_xbtusd = get_quote_tick(&instrument_btcusdt, 50000.00, 50000.00, 1.0, 1.0);
 
-    let position = Position::new(&instrument_ethusdt, fill);
+    let position = Position::new(&instrument_ethusdt, filled);
     let position_opened = get_open_position(&position);
 
     // Act

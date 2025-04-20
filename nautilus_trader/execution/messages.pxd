@@ -32,37 +32,37 @@ from nautilus_trader.model.orders.base cimport Order
 from nautilus_trader.model.orders.list cimport OrderList
 
 
-cdef class TradingReportCommand(Command):
+cdef class ExecutionReportCommand(Command):
     cdef readonly InstrumentId instrument_id
     """The instrument ID associated with the command.\n\n:returns: `InstrumentId`"""
     cdef readonly datetime start
-    """The start datetime (UTC) of request time range (inclusive)."""
+    """The start datetime (UTC) of request time range (inclusive).\n\n:returns `datetime` or ``None``"""
     cdef readonly datetime end
-    """The end datetime (UTC) of request time range."""
+    """The end datetime (UTC) of request time range.\n\n:returns `datetime` or ``None``"""
     cdef readonly dict[str, object] params
     """Additional specific parameters for the command.\n\n:returns: `dict[str, object]` or ``None``"""
 
 
-cdef class GenerateOrderStatusReport(TradingReportCommand):
+cdef class GenerateOrderStatusReport(ExecutionReportCommand):
     cdef readonly ClientOrderId client_order_id
     """The client order ID associated with the command.\n\n:returns: `ClientOrderId`"""
     cdef readonly VenueOrderId venue_order_id
     """The venue order ID associated with the command.\n\n:returns: `VenueOrderId` or ``None``"""
 
 
-cdef class GenerateOrderStatusReports(TradingReportCommand):
+cdef class GenerateOrderStatusReports(ExecutionReportCommand):
     cdef readonly bint open_only
     """If the request is only for open orders.\n\n:returns: `bool`"""
     cdef readonly LogLevel log_receipt_level
     """The log level for logging received reports.\n\n:returns: `LogLevel`"""
 
 
-cdef class GenerateFillReports(TradingReportCommand):
+cdef class GenerateFillReports(ExecutionReportCommand):
     cdef readonly VenueOrderId venue_order_id
     """The venue order ID associated with the command.\n\n:returns: `VenueOrderId` or ``None``"""
 
 
-cdef class GeneratePositionStatusReports(TradingReportCommand):
+cdef class GeneratePositionStatusReports(ExecutionReportCommand):
     pass
 
 

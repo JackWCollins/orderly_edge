@@ -37,6 +37,7 @@ from nautilus_trader.common.component cimport EVT
 from nautilus_trader.common.component cimport RECV
 from nautilus_trader.common.component cimport Clock
 from nautilus_trader.common.component cimport LogColor
+from nautilus_trader.common.component cimport Logger
 from nautilus_trader.common.component cimport MessageBus
 from nautilus_trader.common.component cimport TimeEvent
 from nautilus_trader.common.factories cimport OrderFactory
@@ -143,6 +144,8 @@ cdef class Strategy(Actor):
         component_id = type(self).__name__ if config.strategy_id is None else config.strategy_id
         self.id = StrategyId(f"{component_id}-{config.order_id_tag}")
         self.order_id_tag = str(config.order_id_tag)
+        self.use_uuid_client_order_ids = config.use_uuid_client_order_ids
+        self._log = Logger(name=component_id)
 
         oms_type = config.oms_type or OmsType.UNSPECIFIED
         if isinstance(oms_type, str):
@@ -159,7 +162,7 @@ cdef class Strategy(Actor):
 
         # Public components
         self.clock = self._clock
-        self.cache: Cache = None          # Initialized when registered
+        self.cache: Cache = None   # Initialized when registered
         self.portfolio = None      # Initialized when registered
         self.order_factory = None  # Initialized when registered
 
@@ -285,6 +288,7 @@ cdef class Strategy(Actor):
             strategy_id=self.id,
             clock=clock,
             cache=cache,
+            use_uuid_client_order_ids=self.use_uuid_client_order_ids
         )
 
         self._manager = OrderManager(
@@ -1224,6 +1228,7 @@ cdef class Strategy(Actor):
         Position position,
         ClientId client_id = None,
         list[str] tags = None,
+        TimeInForce time_in_force = TimeInForce.GTC,
         bint reduce_only = True,
         dict[str, object] params = None,
     ):
@@ -1242,6 +1247,8 @@ cdef class Strategy(Actor):
             If ``None`` then will be inferred from the venue in the instrument ID.
         tags : list[str], optional
             The tags for the market order closing the position.
+        time_in_force : TimeInForce, default ``GTC``
+            The time in force for the market order closing the position.
         reduce_only : bool, default True
             If the market order to close the position should carry the 'reduce-only' execution instruction.
             Optional, as not all venues support this feature.
@@ -1266,7 +1273,7 @@ cdef class Strategy(Actor):
             instrument_id=position.instrument_id,
             order_side=Order.closing_side_c(position.side),
             quantity=position.quantity,
-            time_in_force=TimeInForce.GTC,
+            time_in_force=time_in_force,
             reduce_only=reduce_only,
             quote_quantity=False,
             exec_algorithm_id=None,
@@ -1282,6 +1289,7 @@ cdef class Strategy(Actor):
         PositionSide position_side = PositionSide.NO_POSITION_SIDE,
         ClientId client_id = None,
         list[str] tags = None,
+        TimeInForce time_in_force = TimeInForce.GTC,
         bint reduce_only = True,
         dict[str, object] params = None,
     ):
@@ -1299,6 +1307,8 @@ cdef class Strategy(Actor):
             If ``None`` then will be inferred from the venue in the instrument ID.
         tags : list[str], optional
             The tags for the market orders closing the positions.
+        time_in_force : TimeInForce, default ``GTC``
+            The time in force for the market orders closing the positions.
         reduce_only : bool, default True
             If the market orders to close positions should carry the 'reduce-only' execution instruction.
             Optional, as not all venues support this feature.
@@ -1330,7 +1340,7 @@ cdef class Strategy(Actor):
 
         cdef Position position
         for position in positions_open:
-            self.close_position(position, client_id, tags, reduce_only, params)
+            self.close_position(position, client_id, tags, time_in_force, reduce_only, params)
 
     cpdef void query_order(self, Order order, ClientId client_id = None, dict[str, object] params = None):
         """

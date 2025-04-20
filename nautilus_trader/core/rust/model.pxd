@@ -390,19 +390,19 @@ cdef extern from "../includes/model.h":
 
     # The 'Time in Force' instruction for an order.
     cpdef enum TimeInForce:
-        # Good-Till-Canceled (GTC) - the order remains active until canceled.
+        # Good Till Cancel (GTC) - Remains active until canceled.
         GTC # = 1,
-        # Immediate-Or-Cancel (IOC) - the order is filled as much as possible, the rest is canceled.
+        # Immediate or Cancel (IOC) - Executes immediately to the extent possible, with any unfilled portion canceled.
         IOC # = 2,
-        # Fill-Or-Kill (FOK) - the order must be executed in full immediately, or it is canceled.
+        # Fill or Kill (FOK) - Executes in its entirety immediately or is canceled if full execution is not possible.
         FOK # = 3,
-        # Good-Till-Date/Time (GTD) - the order is active until a specified date or time.
+        # Good Till Date (GTD) - Remains active until the specified expiration date or time is reached.
         GTD # = 4,
-        # Day - the order is active until the end of the current trading session.
+        # Day - Remains active until the close of the current trading session.
         DAY # = 5,
-        # At the Opening (ATO) - the order is scheduled to be executed at the market's opening.
+        # At the Opening (ATO) - Executes at the market opening or expires if not filled.
         AT_THE_OPEN # = 6,
-        # At the Closing (ATC) - the order is scheduled to be executed at the market's closing.
+        # At the Closing (ATC) - Executes at the market close or expires if not filled.
         AT_THE_CLOSE # = 7,
 
     # The trading state for a node.
@@ -608,7 +608,7 @@ cdef extern from "../includes/model.h":
         # UNIX timestamp (nanoseconds) when the struct was initialized.
         uint64_t ts_init;
 
-    # Represents a single quote tick in a market.
+    # Represents a quote tick in a market.
     cdef struct QuoteTick_t:
         # The quotes instrument ID.
         InstrumentId_t instrument_id;
@@ -637,7 +637,7 @@ cdef extern from "../includes/model.h":
         # The trade match ID value as a fixed-length C string byte array (includes null terminator).
         uint8_t value[TRADE_ID_LEN];
 
-    # Represents a single trade tick in a market.
+    # Represents a trade tick in a market.
     cdef struct TradeTick_t:
         # The trade instrument ID.
         InstrumentId_t instrument_id;
@@ -716,6 +716,41 @@ cdef extern from "../includes/model.h":
         # UNIX timestamp (nanoseconds) when the struct was initialized.
         uint64_t ts_init;
 
+    # Represents a mark price update.
+    cdef struct MarkPriceUpdate_t:
+        # The instrument ID for the mark price.
+        InstrumentId_t instrument_id;
+        # The mark price.
+        Price_t value;
+        # UNIX timestamp (nanoseconds) when the price event occurred.
+        uint64_t ts_event;
+        # UNIX timestamp (nanoseconds) when the struct was initialized.
+        uint64_t ts_init;
+
+    # Represents an index price update.
+    cdef struct IndexPriceUpdate_t:
+        # The instrument ID for the index price.
+        InstrumentId_t instrument_id;
+        # The index price.
+        Price_t value;
+        # UNIX timestamp (nanoseconds) when the price event occurred.
+        uint64_t ts_event;
+        # UNIX timestamp (nanoseconds) when the struct was initialized.
+        uint64_t ts_init;
+
+    # Represents an instrument close at a venue.
+    cdef struct InstrumentClose_t:
+        # The instrument ID.
+        InstrumentId_t instrument_id;
+        # The closing price for the instrument.
+        Price_t close_price;
+        # The type of closing price.
+        InstrumentCloseType close_type;
+        # UNIX timestamp (nanoseconds) when the close price event occurred.
+        uint64_t ts_event;
+        # UNIX timestamp (nanoseconds) when the struct was initialized.
+        uint64_t ts_init;
+
     # A built-in Nautilus data type.
     #
     # Not recommended for storing large amounts of data, as the largest variant is significantly
@@ -727,6 +762,9 @@ cdef extern from "../includes/model.h":
         QUOTE,
         TRADE,
         BAR,
+        MARK_PRICE_UPDATE,
+        INDEX_PRICE_UPDATE,
+        INSTRUMENT_CLOSE,
 
     cdef struct Data_t:
         Data_t_Tag tag;
@@ -736,6 +774,9 @@ cdef extern from "../includes/model.h":
         QuoteTick_t quote;
         TradeTick_t trade;
         Bar_t bar;
+        MarkPriceUpdate_t mark_price_update;
+        IndexPriceUpdate_t index_price_update;
+        InstrumentClose_t instrument_close;
 
     # Represents a valid trader ID.
     cdef struct TraderId_t:
@@ -1814,6 +1855,8 @@ cdef extern from "../includes/model.h":
     void level_drop(BookLevel_API level);
 
     BookLevel_API level_clone(const BookLevel_API *level);
+
+    OrderSide level_side(const BookLevel_API *level);
 
     Price_t level_price(const BookLevel_API *level);
 

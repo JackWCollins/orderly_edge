@@ -16,13 +16,14 @@
 //! Tests module for `Cache`.
 
 use bytes::Bytes;
+use nautilus_core::UnixNanos;
 use nautilus_model::{
     accounts::AccountAny,
-    data::{Bar, QuoteTick, TradeTick},
+    data::{Bar, MarkPriceUpdate, QuoteTick, TradeTick},
     enums::{BookType, OmsType, OrderSide, OrderStatus, OrderType, PriceType},
     events::{OrderAccepted, OrderEventAny, OrderRejected, OrderSubmitted},
     identifiers::{AccountId, ClientOrderId, InstrumentId, PositionId, Venue},
-    instruments::{CurrencyPair, InstrumentAny, SyntheticInstrument, stubs::*},
+    instruments::{CurrencyPair, Instrument, InstrumentAny, SyntheticInstrument, stubs::*},
     orderbook::OrderBook,
     orders::{
         Order,
@@ -173,7 +174,7 @@ fn test_order_when_submitted(mut cache: Cache, audusd_sim: CurrencyPair) {
     assert_eq!(cache.venue_order_id(&order.client_order_id()), None);
 }
 
-#[ignore] // TODO: Revisit on next pass
+#[ignore = "Revisit on next pass"]
 #[rstest]
 fn test_order_when_rejected(mut cache: Cache, audusd_sim: CurrencyPair) {
     let mut order = OrderTestBuilder::new(OrderType::Market)
@@ -266,7 +267,7 @@ fn test_order_when_accepted(mut cache: Cache, audusd_sim: CurrencyPair) {
     );
 }
 
-#[ignore] // TODO: Revisit on next pass
+#[ignore = "Revisit on next pass"]
 #[rstest]
 fn test_order_when_filled(mut cache: Cache, audusd_sim: CurrencyPair) {
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
@@ -285,7 +286,7 @@ fn test_order_when_filled(mut cache: Cache, audusd_sim: CurrencyPair) {
     order.apply(OrderEventAny::Accepted(accepted)).unwrap();
     cache.update_order(&order).unwrap();
 
-    let filled = TestOrderEventStubs::order_filled(
+    let filled = TestOrderEventStubs::filled(
         &order,
         &audusd_sim,
         None,
@@ -426,7 +427,7 @@ fn test_position_when_some(mut cache: Cache, audusd_sim: CurrencyPair) {
         .side(OrderSide::Buy)
         .quantity(Quantity::from(100_000))
         .build();
-    let fill = TestOrderEventStubs::order_filled(
+    let filled = TestOrderEventStubs::filled(
         &order,
         &audusd_sim,
         None,
@@ -438,7 +439,7 @@ fn test_position_when_some(mut cache: Cache, audusd_sim: CurrencyPair) {
         None,
         None,
     );
-    let position = Position::new(&audusd_sim, fill.into());
+    let position = Position::new(&audusd_sim, filled.into());
     cache
         .add_position(position.clone(), OmsType::Netting)
         .unwrap();
@@ -574,10 +575,15 @@ fn test_price_when_empty(cache: Cache, audusd_sim: CurrencyPair, #[case] price_t
 
 #[rstest]
 fn test_price_when_some(mut cache: Cache, audusd_sim: CurrencyPair) {
-    let mark_price = Price::new(1.00000, 5);
-    cache.add_mark_price(&audusd_sim.id, mark_price);
+    let mark_price = MarkPriceUpdate::new(
+        audusd_sim.id,
+        Price::from("1.00000"),
+        UnixNanos::from(5),
+        UnixNanos::from(10),
+    );
+    cache.add_mark_price(mark_price).unwrap();
     let result = cache.price(&audusd_sim.id, PriceType::Mark);
-    assert_eq!(result, Some(mark_price));
+    assert_eq!(result, Some(mark_price.value));
 }
 
 #[rstest]
@@ -642,6 +648,30 @@ fn test_trade_ticks_when_some(mut cache: Cache) {
     cache.add_trades(&trades).unwrap();
     let result = cache.trades(&trades[0].instrument_id);
     assert_eq!(result, Some(trades));
+}
+
+#[rstest]
+fn test_mark_price_when_empty(cache: Cache, audusd_sim: CurrencyPair) {
+    let result = cache.mark_price(&audusd_sim.id);
+    assert!(result.is_none());
+}
+
+#[rstest]
+fn test_mark_prices_when_empty(cache: Cache, audusd_sim: CurrencyPair) {
+    let result = cache.mark_prices(&audusd_sim.id);
+    assert!(result.is_none());
+}
+
+#[rstest]
+fn test_index_price_when_empty(cache: Cache, audusd_sim: CurrencyPair) {
+    let result = cache.index_price(&audusd_sim.id);
+    assert!(result.is_none());
+}
+
+#[rstest]
+fn test_index_prices_when_empty(cache: Cache, audusd_sim: CurrencyPair) {
+    let result = cache.index_prices(&audusd_sim.id);
+    assert!(result.is_none());
 }
 
 #[rstest]
@@ -794,4 +824,77 @@ fn test_clear_mark_xrates(mut cache: Cache) {
 fn test_set_mark_xrate_panics_on_zero(mut cache: Cache) {
     // Setting a mark xrate of zero should panic
     cache.set_mark_xrate(Currency::USD(), Currency::EUR(), 0.0);
+}
+
+#[rstest]
+fn test_purge_order() {
+    let mut cache = Cache::default();
+    let audusd_sim = audusd_sim();
+    let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
+
+    // Add an order to cache
+    let order = OrderTestBuilder::new(OrderType::Limit)
+        .instrument_id(audusd_sim.id())
+        .side(OrderSide::Buy)
+        .price(Price::from("1.00000"))
+        .quantity(Quantity::from(100_000))
+        .build();
+
+    let client_order_id = order.client_order_id();
+    cache.add_order(order, None, None, false).unwrap();
+
+    // Verify the order exists
+    assert!(cache.order_exists(&client_order_id));
+    assert_eq!(cache.orders_total_count(None, None, None, None), 1);
+
+    // Purge the order
+    cache.purge_order(client_order_id);
+
+    // Verify the order is gone
+    assert!(!cache.order_exists(&client_order_id));
+    assert_eq!(cache.orders_total_count(None, None, None, None), 0);
+}
+
+#[rstest]
+fn test_purge_position() {
+    let mut cache = Cache::default();
+    let audusd_sim = audusd_sim();
+    let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
+
+    // Create an order and fill to generate a position
+    let order = OrderTestBuilder::new(OrderType::Market)
+        .instrument_id(audusd_sim.id())
+        .side(OrderSide::Buy)
+        .quantity(Quantity::from(100_000))
+        .build();
+
+    let filled = TestOrderEventStubs::filled(
+        &order,
+        &audusd_sim,
+        None,
+        Some(PositionId::new("P-123456")),
+        Some(Price::from("1.00001")),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let position = Position::new(&audusd_sim, filled.into());
+    let position_id = position.id;
+
+    // Add position to cache
+    cache.add_position(position, OmsType::Netting).unwrap();
+
+    // Verify the position exists
+    assert!(cache.position_exists(&position_id));
+    assert_eq!(cache.positions_total_count(None, None, None, None), 1);
+
+    // Purge the position
+    cache.purge_position(position_id);
+
+    // Verify the position is gone
+    assert!(!cache.position_exists(&position_id));
+    assert_eq!(cache.positions_total_count(None, None, None, None), 0);
 }

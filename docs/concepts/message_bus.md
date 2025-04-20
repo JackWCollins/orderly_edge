@@ -104,7 +104,7 @@ def on_each_10th_bar(self, event: Each10thBarEvent):
 
 #### Full example
 
-[MessageBus Example](https://github.com/nautechsystems/nautilus_trader/tree/develop/examples/backtest/example_09_custom_event_with_msgbus)
+[MessageBus Example](https://github.com/nautechsystems/nautilus_trader/tree/develop/examples/backtest/example_09_messaging_with_msgbus)
 
 ### Actor-based publish/subscribe data
 
@@ -129,7 +129,7 @@ The Data publish/subscribe approach excels when you need:
 #### Inheriting from `Data` vs. using `@customdataclass`
 
 **Inheriting from `Data` class:**
-- Adds the required `ts_event` and `ts_init` attributes and their getters. These ensure proper data ordering in backtests based on timestamps.
+- Defines abstract properties `ts_event` and `ts_init` that must be implemented by the subclass. These ensure proper data ordering in backtests based on timestamps.
 
 **The `@customdataclass` decorator:**
 - Adds `ts_event` and `ts_init` attributes if they are not already present.
@@ -318,7 +318,7 @@ Use the `encoding` config option to control the message writing encoding.
 
 :::tip
 The `msgpack` encoding is used by default as it offers the most optimal serialization and memory performance.
-It's recommended to use `json` encoding for human readability when performance is not a primary concern.
+We recommend using `json` encoding for human readability when performance is not a primary concern.
 :::
 
 ### Timestamp formatting

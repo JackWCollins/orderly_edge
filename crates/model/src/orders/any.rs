@@ -19,7 +19,7 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    base::Order, limit::LimitOrder, limit_if_touched::LimitIfTouchedOrder, market::MarketOrder,
+    Order, limit::LimitOrder, limit_if_touched::LimitIfTouchedOrder, market::MarketOrder,
     market_if_touched::MarketIfTouchedOrder, market_to_limit::MarketToLimitOrder,
     stop_limit::StopLimitOrder, stop_market::StopMarketOrder,
     trailing_stop_limit::TrailingStopLimitOrder, trailing_stop_market::TrailingStopMarketOrder,
@@ -27,7 +27,7 @@ use super::{
 use crate::{events::OrderEventAny, types::Price};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[enum_dispatch]
+#[enum_dispatch(Order)]
 pub enum OrderAny {
     Limit(LimitOrder),
     LimitIfTouched(LimitIfTouchedOrder),
@@ -82,14 +82,14 @@ impl Display for OrderAny {
             "{}",
             match self {
                 Self::Limit(order) => order.to_string(),
-                Self::LimitIfTouched(order) => format!("{:?}", order), // TODO: Implement
+                Self::LimitIfTouched(order) => format!("{order:?}"), // TODO: Implement
                 Self::Market(order) => order.to_string(),
-                Self::MarketIfTouched(order) => format!("{:?}", order), // TODO: Implement
-                Self::MarketToLimit(order) => format!("{:?}", order),   // TODO: Implement
+                Self::MarketIfTouched(order) => format!("{order:?}"), // TODO: Implement
+                Self::MarketToLimit(order) => format!("{order:?}"),   // TODO: Implement
                 Self::StopLimit(order) => order.to_string(),
-                Self::StopMarket(order) => format!("{:?}", order), // TODO: Implement
-                Self::TrailingStopLimit(order) => format!("{:?}", order), // TODO: Implement
-                Self::TrailingStopMarket(order) => format!("{:?}", order), // TODO: Implement
+                Self::StopMarket(order) => format!("{order:?}"), // TODO: Implement
+                Self::TrailingStopLimit(order) => format!("{order:?}"), // TODO: Implement
+                Self::TrailingStopMarket(order) => format!("{order:?}"), // TODO: Implement
             }
         )
     }
@@ -171,7 +171,7 @@ impl From<LimitOrderAny> for OrderAny {
 }
 
 #[derive(Clone, Debug)]
-#[enum_dispatch]
+#[enum_dispatch(Order)]
 pub enum PassiveOrderAny {
     Limit(LimitOrderAny),
     Stop(StopOrderAny),
@@ -198,7 +198,7 @@ impl PartialEq for PassiveOrderAny {
 }
 
 #[derive(Clone, Debug)]
-#[enum_dispatch]
+#[enum_dispatch(Order)]
 pub enum LimitOrderAny {
     Limit(LimitOrder),
     MarketToLimit(MarketToLimitOrder),
@@ -230,7 +230,7 @@ impl PartialEq for LimitOrderAny {
 }
 
 #[derive(Clone, Debug)]
-#[enum_dispatch]
+#[enum_dispatch(Order)]
 pub enum StopOrderAny {
     LimitIfTouched(LimitIfTouchedOrder),
     MarketIfTouched(MarketIfTouchedOrder),

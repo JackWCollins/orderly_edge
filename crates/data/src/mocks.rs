@@ -17,41 +17,37 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use nautilus_common::{
     cache::Cache,
-    messages::data::{DataRequest, Payload},
-    msgbus::MessageBus,
+    messages::data::{
+        RequestBars, RequestBookSnapshot, RequestData, RequestInstrument, RequestInstruments,
+        RequestQuotes, RequestTrades, SubscribeBars, SubscribeBookDeltas, SubscribeBookDepth10,
+        SubscribeBookSnapshots, SubscribeData, SubscribeIndexPrices, SubscribeInstrument,
+        SubscribeInstrumentClose, SubscribeInstrumentStatus, SubscribeInstruments,
+        SubscribeMarkPrices, SubscribeQuotes, SubscribeTrades, UnsubscribeBars,
+        UnsubscribeBookDeltas, UnsubscribeBookDepth10, UnsubscribeBookSnapshots, UnsubscribeData,
+        UnsubscribeIndexPrices, UnsubscribeInstrument, UnsubscribeInstrumentClose,
+        UnsubscribeInstrumentStatus, UnsubscribeInstruments, UnsubscribeMarkPrices,
+        UnsubscribeQuotes, UnsubscribeTrades,
+    },
 };
-use nautilus_core::{UUID4, UnixNanos};
-use nautilus_model::{
-    data::{Bar, BarType, DataType, QuoteTick, TradeTick},
-    enums::BookType,
-    identifiers::{ClientId, InstrumentId, Venue},
-    instruments::InstrumentAny,
-};
+use nautilus_model::identifiers::{ClientId, Venue};
 
 use crate::client::DataClient;
 
 pub struct MockDataClient {
     cache: Rc<RefCell<Cache>>,
-    msgbus: Rc<RefCell<MessageBus>>,
     pub client_id: ClientId,
     pub venue: Venue,
 }
 
 impl MockDataClient {
     /// Creates a new [`MockDataClient`] instance.
-    pub const fn new(
-        cache: Rc<RefCell<Cache>>,
-        msgbus: Rc<RefCell<MessageBus>>,
-        client_id: ClientId,
-        venue: Venue,
-    ) -> Self {
+    pub const fn new(cache: Rc<RefCell<Cache>>, client_id: ClientId, venue: Venue) -> Self {
         Self {
             cache,
-            msgbus,
             client_id,
             venue,
         }
@@ -79,243 +75,146 @@ impl DataClient for MockDataClient {
 
     // -- COMMAND HANDLERS ---------------------------------------------------------------------------
 
-    /// Parse command and call specific function
-    fn subscribe(
-        &mut self,
-        _data_type: &DataType,
-        _params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe(&mut self, _cmd: SubscribeData) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_instruments(
-        &mut self,
-        _venue: Option<&Venue>,
-        _params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_instruments(&mut self, _cmd: SubscribeInstruments) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_instrument(
-        &mut self,
-        _instrument_id: &InstrumentId,
-        _params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_instrument(&mut self, _cmd: SubscribeInstrument) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_order_book_deltas(
-        &mut self,
-        _instrument_id: &InstrumentId,
-        _book_type: BookType,
-        _depth: Option<usize>,
-        _params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_book_deltas(&mut self, _cmd: SubscribeBookDeltas) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_order_book_snapshots(
-        &mut self,
-        instrument_id: &InstrumentId,
-        book_type: BookType,
-        depth: Option<usize>,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_book_depth10(&mut self, _cmd: SubscribeBookDepth10) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_quote_ticks(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_book_snapshots(&mut self, _cmd: SubscribeBookSnapshots) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_trade_ticks(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_quotes(&mut self, _cmd: SubscribeQuotes) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_bars(
-        &mut self,
-        bar_type: &BarType,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_trades(&mut self, _cmd: SubscribeTrades) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn subscribe_bars(&mut self, _cmd: SubscribeBars) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn subscribe_mark_prices(&mut self, _cmd: SubscribeMarkPrices) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn subscribe_index_prices(&mut self, _cmd: SubscribeIndexPrices) -> anyhow::Result<()> {
         Ok(())
     }
 
     fn subscribe_instrument_status(
         &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
+        _cmd: SubscribeInstrumentStatus,
     ) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn subscribe_instrument_close(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn subscribe_instrument_close(&mut self, _cmd: SubscribeInstrumentClose) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe(
-        &mut self,
-        data_type: &DataType,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe(&mut self, _cmd: UnsubscribeData) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe_instruments(
-        &mut self,
-        venue: Option<&Venue>,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe_instruments(&mut self, _cmd: UnsubscribeInstruments) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe_instrument(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe_instrument(&mut self, _cmd: UnsubscribeInstrument) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe_order_book_deltas(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe_book_deltas(&mut self, _cmd: UnsubscribeBookDeltas) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe_order_book_snapshots(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe_book_depth10(&mut self, _cmd: UnsubscribeBookDepth10) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe_quote_ticks(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe_book_snapshots(&mut self, _cmd: UnsubscribeBookSnapshots) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe_trade_ticks(
-        &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe_quotes(&mut self, _cmd: UnsubscribeQuotes) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn unsubscribe_bars(
-        &mut self,
-        bar_type: &BarType,
-        params: &Option<HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
+    fn unsubscribe_trades(&mut self, _cmd: UnsubscribeTrades) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn unsubscribe_bars(&mut self, _cmd: UnsubscribeBars) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn unsubscribe_mark_prices(&mut self, _cmd: UnsubscribeMarkPrices) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn unsubscribe_index_prices(&mut self, _cmd: UnsubscribeIndexPrices) -> anyhow::Result<()> {
         Ok(())
     }
 
     fn unsubscribe_instrument_status(
         &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
+        _cmd: UnsubscribeInstrumentStatus,
     ) -> anyhow::Result<()> {
         Ok(())
     }
 
     fn unsubscribe_instrument_close(
         &mut self,
-        instrument_id: &InstrumentId,
-        params: &Option<HashMap<String, String>>,
+        _cmd: UnsubscribeInstrumentClose,
     ) -> anyhow::Result<()> {
         Ok(())
     }
 
     // -- DATA REQUEST HANDLERS ---------------------------------------------------------------------------
 
-    fn request_data(&self, request: DataRequest) {
+    fn request_data(&self, request: RequestData) -> anyhow::Result<()> {
         todo!()
     }
 
-    fn request_instruments(
-        &self,
-        correlation_id: UUID4,
-        venue: Venue,
-        start: Option<UnixNanos>,
-        end: Option<UnixNanos>,
-        params: &Option<HashMap<String, String>>,
-    ) -> Vec<InstrumentAny> {
+    fn request_instruments(&self, request: RequestInstruments) -> anyhow::Result<()> {
         todo!()
     }
 
-    fn request_instrument(
-        &self,
-        correlation_id: UUID4,
-        instrument_id: InstrumentId,
-        start: Option<UnixNanos>,
-        end: Option<UnixNanos>,
-        params: &Option<HashMap<String, String>>,
-    ) -> InstrumentAny {
+    fn request_instrument(&self, request: RequestInstrument) -> anyhow::Result<()> {
         todo!()
     }
 
-    // TODO: figure out where to call this and it's return type
-    fn request_order_book_snapshot(
-        &self,
-        correlation_id: UUID4,
-        instrument_id: InstrumentId,
-        depth: Option<usize>,
-        params: &Option<HashMap<String, String>>,
-    ) -> Payload {
+    fn request_book_snapshot(&self, request: RequestBookSnapshot) -> anyhow::Result<()> {
         todo!()
     }
 
-    fn request_quote_ticks(
-        &self,
-        correlation_id: UUID4,
-        instrument_id: InstrumentId,
-        start: Option<UnixNanos>,
-        end: Option<UnixNanos>,
-        limit: Option<usize>,
-        params: &Option<HashMap<String, String>>,
-    ) -> Vec<QuoteTick> {
+    fn request_quotes(&self, request: RequestQuotes) -> anyhow::Result<()> {
         todo!()
     }
 
-    fn request_trade_ticks(
-        &self,
-        correlation_id: UUID4,
-        instrument_id: InstrumentId,
-        start: Option<UnixNanos>,
-        end: Option<UnixNanos>,
-        limit: Option<usize>,
-        params: &Option<HashMap<String, String>>,
-    ) -> Vec<TradeTick> {
+    fn request_trades(&self, request: RequestTrades) -> anyhow::Result<()> {
         todo!()
     }
 
-    fn request_bars(
-        &self,
-        correlation_id: UUID4,
-        bar_type: BarType,
-        start: Option<UnixNanos>,
-        end: Option<UnixNanos>,
-        limit: Option<usize>,
-        params: &Option<HashMap<String, String>>,
-    ) -> Vec<Bar> {
+    fn request_bars(&self, request: RequestBars) -> anyhow::Result<()> {
         todo!()
     }
 }

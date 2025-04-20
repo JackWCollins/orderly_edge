@@ -27,10 +27,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use ustr::Ustr;
 
-use super::{
-    any::OrderAny,
-    base::{Order, OrderCore},
-};
+use super::{Order, OrderAny, OrderCore};
 use crate::{
     enums::{
         ContingencyType, LiquiditySide, OrderSide, OrderStatus, OrderType, PositionSide,
@@ -42,7 +39,7 @@ use crate::{
         StrategyId, Symbol, TradeId, TraderId, Venue, VenueOrderId,
     },
     orders::OrderError,
-    types::{Currency, Money, Price, Quantity, quantity::check_quantity_positive},
+    types::{Currency, Money, Price, Quantity, quantity::check_positive_quantity},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -125,7 +122,7 @@ impl MarketOrder {
         exec_spawn_id: Option<ClientOrderId>,
         tags: Option<Vec<Ustr>>,
     ) -> anyhow::Result<Self> {
-        check_quantity_positive(quantity)?;
+        check_positive_quantity(quantity, stringify!(quantity))?;
         check_predicate_false(
             time_in_force == TimeInForce::Gtd,
             "GTD not supported for Market orders",
@@ -369,20 +366,24 @@ impl Order for MarketOrder {
         self.init_id
     }
 
-    fn ts_last(&self) -> UnixNanos {
-        self.ts_last
-    }
-
-    fn ts_accepted(&self) -> Option<UnixNanos> {
-        self.ts_accepted
+    fn ts_init(&self) -> UnixNanos {
+        self.ts_init
     }
 
     fn ts_submitted(&self) -> Option<UnixNanos> {
         self.ts_submitted
     }
 
-    fn ts_init(&self) -> UnixNanos {
-        self.ts_init
+    fn ts_accepted(&self) -> Option<UnixNanos> {
+        self.ts_accepted
+    }
+
+    fn ts_closed(&self) -> Option<UnixNanos> {
+        self.ts_closed
+    }
+
+    fn ts_last(&self) -> UnixNanos {
+        self.ts_last
     }
 
     fn apply(&mut self, event: OrderEventAny) -> Result<(), OrderError> {
@@ -539,7 +540,9 @@ mod tests {
     };
 
     #[rstest]
-    #[should_panic(expected = "Condition failed: invalid `Quantity`, should be positive and was 0")]
+    #[should_panic(
+        expected = "Condition failed: invalid `Quantity` for 'quantity' not positive, was 0"
+    )]
     fn test_positive_quantity_condition(audusd_sim: CurrencyPair) {
         let _ = OrderTestBuilder::new(OrderType::Market)
             .instrument_id(audusd_sim.id)

@@ -54,6 +54,16 @@ class BybitMarginMode(Enum):
 
 
 @unique
+class BybitPositionMode(Enum):
+    """
+    https://bybit-exchange.github.io/docs/v5/position/position-mode
+    """
+
+    MERGED_SINGLE = 0
+    BOTH_SIDES = 3
+
+
+@unique
 class BybitPositionIdx(Enum):
     # One-way mode position
     ONE_WAY = 0
@@ -288,6 +298,30 @@ class BybitEnumParser:
                 BybitTriggerDirection.NONE,
             ): OrderType.MARKET,
             (
+                BybitOrderType.MARKET,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.BUY,
+                BybitTriggerDirection.FALLS_TO,
+            ): OrderType.MARKET,
+            (
+                BybitOrderType.MARKET,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.BUY,
+                BybitTriggerDirection.RISES_TO,
+            ): OrderType.MARKET,
+            (
+                BybitOrderType.MARKET,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.SELL,
+                BybitTriggerDirection.FALLS_TO,
+            ): OrderType.MARKET,
+            (
+                BybitOrderType.MARKET,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.SELL,
+                BybitTriggerDirection.RISES_TO,
+            ): OrderType.MARKET,
+            (
                 BybitOrderType.LIMIT,
                 BybitStopOrderType.NONE,
                 BybitOrderSide.BUY,
@@ -334,6 +368,30 @@ class BybitEnumParser:
                 BybitStopOrderType.STOP,
                 BybitOrderSide.SELL,
                 BybitTriggerDirection.FALLS_TO,
+            ): OrderType.LIMIT_IF_TOUCHED,
+            (
+                BybitOrderType.LIMIT,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.BUY,
+                BybitTriggerDirection.FALLS_TO,
+            ): OrderType.LIMIT_IF_TOUCHED,
+            (
+                BybitOrderType.LIMIT,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.BUY,
+                BybitTriggerDirection.RISES_TO,
+            ): OrderType.LIMIT_IF_TOUCHED,
+            (
+                BybitOrderType.LIMIT,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.SELL,
+                BybitTriggerDirection.FALLS_TO,
+            ): OrderType.LIMIT_IF_TOUCHED,
+            (
+                BybitOrderType.LIMIT,
+                BybitStopOrderType.UNKNOWN,
+                BybitOrderSide.SELL,
+                BybitTriggerDirection.RISES_TO,
             ): OrderType.LIMIT_IF_TOUCHED,
             (
                 BybitOrderType.LIMIT,

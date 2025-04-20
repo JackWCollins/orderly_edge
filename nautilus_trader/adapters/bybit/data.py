@@ -144,9 +144,11 @@ class BybitDataClient(LiveMarketDataClient):
         )
 
         # Configuration
+        self._bars_timestamp_on_close = config.bars_timestamp_on_close
         self._log.info(f"Product types: {[p.value for p in product_types]}", LogColor.BLUE)
         self._log.info(f"{config.update_instruments_interval_mins=}", LogColor.BLUE)
         self._log.info(f"{config.recv_window_ms=:_}", LogColor.BLUE)
+        self._log.info(f"{config.bars_timestamp_on_close=}", LogColor.BLUE)
 
         # HTTP API
         self._http_market = BybitMarketHttpAPI(
@@ -510,6 +512,7 @@ class BybitDataClient(LiveMarketDataClient):
             end=end_time_ms,
             limit=request.limit if request.limit else None,
             ts_init=self._clock.timestamp_ns(),
+            timestamp_on_close=self._bars_timestamp_on_close,
         )
         partial: Bar = bars.pop()
         self._handle_bars(request.bar_type, bars, partial, request.id, request.params)
@@ -567,7 +570,7 @@ class BybitDataClient(LiveMarketDataClient):
             else:
                 self._log.error(f"Unknown websocket message topic: {ws_message.topic}")
         except Exception as e:
-            self._log.error(f"Failed to parse websocket message: {raw.decode()} with error {e}")
+            self._log.exception(f"Failed to parse websocket message: {raw.decode()}", e)
 
     def _handle_orderbook(self, product_type: BybitProductType, raw: bytes, topic: str) -> None:
         msg = self._decoder_ws_orderbook.decode(raw)
@@ -634,10 +637,13 @@ class BybitDataClient(LiveMarketDataClient):
             ask_size = None
 
             if last_quote is not None:
-                bid_price = last_quote.bid_price
-                ask_price = last_quote.ask_price
-                bid_size = last_quote.bid_size
-                ask_size = last_quote.ask_size
+                # Convert the previous quote to new price and sizes to ensure that the precision
+                # of the new Quote is consistent with the instrument definition even after
+                # updates of the instrument.
+                bid_price = Price(last_quote.bid_price.as_double(), instrument.price_precision)
+                ask_price = Price(last_quote.ask_price.as_double(), instrument.price_precision)
+                bid_size = Quantity(last_quote.bid_size.as_double(), instrument.size_precision)
+                ask_size = Quantity(last_quote.ask_size.as_double(), instrument.size_precision)
 
             if msg.data.bid1Price is not None:
                 bid_price = Price(float(msg.data.bid1Price), instrument.price_precision)
@@ -664,7 +670,7 @@ class BybitDataClient(LiveMarketDataClient):
             self._last_quotes[quote.instrument_id] = quote
             self._handle_data(quote)
         except Exception as e:
-            self._log.error(f"Failed to parse ticker: {msg} with error {e}")
+            self._log.exception(f"Failed to parse ticker: {msg}", e)
 
     def _handle_trade(self, product_type: BybitProductType, raw: bytes) -> None:
         msg = self._decoder_ws_trade.decode(raw)
@@ -684,19 +690,34 @@ class BybitDataClient(LiveMarketDataClient):
                 )
                 self._handle_data(trade)
         except Exception as e:
-            self._log.error(f"Failed to parse trade tick: {msg} with error {e}")
+            self._log.exception(f"Failed to parse trade tick: {msg}", e)
 
     def _handle_kline(self, raw: bytes) -> None:
         msg = self._decoder_ws_kline.decode(raw)
         try:
             bar_type = self._topic_bar_type.get(msg.topic)
+
+            if bar_type is None:
+                self._log.error(f"Cannot parse bar data: no bar_type for {msg.topic}")
+                return
+
+            instrument_id = bar_type.instrument_id
+            instrument = self._cache.instrument(instrument_id)
+
+            if instrument is None:
+                self._log.error(f"Cannot parse bar data: no instrument for {instrument_id}")
+                return
+
             for data in msg.data:
                 if not data.confirm:
                     continue  # Bar still building
                 bar: Bar = data.parse_to_bar(
-                    bar_type,
-                    self._clock.timestamp_ns(),
+                    bar_type=bar_type,
+                    price_precision=instrument.price_precision,
+                    size_precision=instrument.size_precision,
+                    ts_init=self._clock.timestamp_ns(),
+                    timestamp_on_close=self._bars_timestamp_on_close,
                 )
                 self._handle_data(bar)
         except Exception as e:
-            self._log.error(f"Failed to parse bar: {msg} with error {e}")
+            self._log.exception(f"Failed to parse bar: {msg}", e)

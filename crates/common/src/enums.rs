@@ -17,6 +17,7 @@
 
 use std::fmt::Debug;
 
+use log::Level;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString, FromRepr};
 
@@ -26,6 +27,7 @@ use strum::{Display, EnumIter, EnumString, FromRepr};
     Copy,
     Clone,
     Debug,
+    Default,
     Display,
     Hash,
     PartialEq,
@@ -46,6 +48,7 @@ use strum::{Display, EnumIter, EnumString, FromRepr};
 )]
 pub enum ComponentState {
     /// When a component is instantiated, but not yet ready to fulfill its specification.
+    #[default]
     PreInitialized = 0,
     /// When a component is able to be started.
     Ready = 1,
@@ -130,6 +133,36 @@ pub enum ComponentTrigger {
     Fault = 14,
     /// A trigger when the component has successfully faulted.
     FaultCompleted = 15,
+}
+
+/// Represents the environment context for a Nautilus system.
+#[repr(C)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Display,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    FromRepr,
+    EnumIter,
+    EnumString,
+    Serialize,
+    Deserialize,
+)]
+#[strum(ascii_case_insensitive)]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(eq, eq_int, module = "nautilus_trader.core.nautilus_pyo3.common.enums")
+)]
+pub enum Environment {
+    Backtest,
+    Sandbox,
+    Live,
 }
 
 /// The log level for log messages.
@@ -256,6 +289,18 @@ impl From<u8> for LogColor {
             5 => Self::Yellow,
             6 => Self::Red,
             _ => Self::Normal,
+        }
+    }
+}
+
+impl From<Level> for LogColor {
+    fn from(value: Level) -> Self {
+        match value {
+            Level::Error => Self::Red,
+            Level::Warn => Self::Yellow,
+            Level::Info => Self::Normal,
+            Level::Debug => Self::Normal,
+            Level::Trace => Self::Normal,
         }
     }
 }

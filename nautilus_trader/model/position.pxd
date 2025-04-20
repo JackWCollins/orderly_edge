@@ -84,9 +84,9 @@ cdef class Position:
     cdef readonly uint64_t ts_last
     """UNIX timestamp (nanoseconds) when the last event occurred.\n\n:returns: `uint64_t`"""
     cdef readonly uint64_t ts_closed
-    """UNIX timestamp (nanoseconds) when the position was closed.\n\n:returns: `uint64_t`"""
+    """UNIX timestamp (nanoseconds) when the position was closed (zero unless closed).\n\n:returns: `uint64_t`"""
     cdef readonly uint64_t duration_ns
-    """The total open duration (nanoseconds).\n\n:returns: `uint64_t`"""
+    """The total open duration in nanoseconds (zero unless closed).\n\n:returns: `uint64_t`"""
     cdef readonly double avg_px_open
     """The average open price.\n\n:returns: `double`"""
     cdef readonly double avg_px_close
@@ -114,6 +114,7 @@ cdef class Position:
 
     @staticmethod
     cdef PositionSide side_from_order_side_c(OrderSide side)
+    cpdef OrderSide closing_order_side(self)
     cpdef signed_decimal_qty(self)
     cpdef bint is_opposite_side(self, OrderSide side)
 

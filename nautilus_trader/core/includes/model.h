@@ -723,31 +723,31 @@ typedef enum RecordFlag {
  */
 typedef enum TimeInForce {
     /**
-     * Good-Till-Canceled (GTC) - the order remains active until canceled.
+     * Good Till Cancel (GTC) - Remains active until canceled.
      */
     GTC = 1,
     /**
-     * Immediate-Or-Cancel (IOC) - the order is filled as much as possible, the rest is canceled.
+     * Immediate or Cancel (IOC) - Executes immediately to the extent possible, with any unfilled portion canceled.
      */
     IOC = 2,
     /**
-     * Fill-Or-Kill (FOK) - the order must be executed in full immediately, or it is canceled.
+     * Fill or Kill (FOK) - Executes in its entirety immediately or is canceled if full execution is not possible.
      */
     FOK = 3,
     /**
-     * Good-Till-Date/Time (GTD) - the order is active until a specified date or time.
+     * Good Till Date (GTD) - Remains active until the specified expiration date or time is reached.
      */
     GTD = 4,
     /**
-     * Day - the order is active until the end of the current trading session.
+     * Day - Remains active until the close of the current trading session.
      */
     DAY = 5,
     /**
-     * At the Opening (ATO) - the order is scheduled to be executed at the market's opening.
+     * At the Opening (ATO) - Executes at the market opening or expires if not filled.
      */
     AT_THE_OPEN = 6,
     /**
-     * At the Closing (ATC) - the order is scheduled to be executed at the market's closing.
+     * At the Closing (ATC) - Executes at the market close or expires if not filled.
      */
     AT_THE_CLOSE = 7,
 } TimeInForce;
@@ -1088,7 +1088,7 @@ typedef struct OrderBookDepth10_t {
 } OrderBookDepth10_t;
 
 /**
- * Represents a single quote tick in a market.
+ * Represents a quote tick in a market.
  */
 typedef struct QuoteTick_t {
     /**
@@ -1139,7 +1139,7 @@ typedef struct TradeId_t {
 } TradeId_t;
 
 /**
- * Represents a single trade tick in a market.
+ * Represents a trade tick in a market.
  */
 typedef struct TradeTick_t {
     /**
@@ -1289,6 +1289,76 @@ typedef struct Bar_t {
 } Bar_t;
 
 /**
+ * Represents a mark price update.
+ */
+typedef struct MarkPriceUpdate_t {
+    /**
+     * The instrument ID for the mark price.
+     */
+    struct InstrumentId_t instrument_id;
+    /**
+     * The mark price.
+     */
+    struct Price_t value;
+    /**
+     * UNIX timestamp (nanoseconds) when the price event occurred.
+     */
+    uint64_t ts_event;
+    /**
+     * UNIX timestamp (nanoseconds) when the struct was initialized.
+     */
+    uint64_t ts_init;
+} MarkPriceUpdate_t;
+
+/**
+ * Represents an index price update.
+ */
+typedef struct IndexPriceUpdate_t {
+    /**
+     * The instrument ID for the index price.
+     */
+    struct InstrumentId_t instrument_id;
+    /**
+     * The index price.
+     */
+    struct Price_t value;
+    /**
+     * UNIX timestamp (nanoseconds) when the price event occurred.
+     */
+    uint64_t ts_event;
+    /**
+     * UNIX timestamp (nanoseconds) when the struct was initialized.
+     */
+    uint64_t ts_init;
+} IndexPriceUpdate_t;
+
+/**
+ * Represents an instrument close at a venue.
+ */
+typedef struct InstrumentClose_t {
+    /**
+     * The instrument ID.
+     */
+    struct InstrumentId_t instrument_id;
+    /**
+     * The closing price for the instrument.
+     */
+    struct Price_t close_price;
+    /**
+     * The type of closing price.
+     */
+    enum InstrumentCloseType close_type;
+    /**
+     * UNIX timestamp (nanoseconds) when the close price event occurred.
+     */
+    uint64_t ts_event;
+    /**
+     * UNIX timestamp (nanoseconds) when the struct was initialized.
+     */
+    uint64_t ts_init;
+} InstrumentClose_t;
+
+/**
  * A built-in Nautilus data type.
  *
  * Not recommended for storing large amounts of data, as the largest variant is significantly
@@ -1301,6 +1371,9 @@ typedef enum Data_t_Tag {
     QUOTE,
     TRADE,
     BAR,
+    MARK_PRICE_UPDATE,
+    INDEX_PRICE_UPDATE,
+    INSTRUMENT_CLOSE,
 } Data_t_Tag;
 
 typedef struct Data_t {
@@ -1323,6 +1396,15 @@ typedef struct Data_t {
         };
         struct {
             struct Bar_t bar;
+        };
+        struct {
+            struct MarkPriceUpdate_t mark_price_update;
+        };
+        struct {
+            struct IndexPriceUpdate_t index_price_update;
+        };
+        struct {
+            struct InstrumentClose_t instrument_close;
         };
     };
 } Data_t;
@@ -2734,6 +2816,8 @@ struct BookLevel_API level_new(enum OrderSide order_side, struct Price_t price, 
 void level_drop(struct BookLevel_API level);
 
 struct BookLevel_API level_clone(const struct BookLevel_API *level);
+
+enum OrderSide level_side(const struct BookLevel_API *level);
 
 struct Price_t level_price(const struct BookLevel_API *level);
 

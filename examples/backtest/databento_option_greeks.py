@@ -21,7 +21,6 @@
 
 # %%
 # from nautilus_trader.model.data import DataType
-# from nautilus_trader.persistence.catalog.types import CatalogWriteMode
 from nautilus_trader.adapters.databento.data_utils import data_path
 from nautilus_trader.adapters.databento.data_utils import databento_data
 from nautilus_trader.adapters.databento.data_utils import load_catalog
@@ -46,6 +45,7 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
+from nautilus_trader.persistence.catalog.types import CatalogWriteMode
 from nautilus_trader.persistence.loaders import InterestRateProvider
 from nautilus_trader.persistence.loaders import InterestRateProviderConfig
 from nautilus_trader.trading.strategy import Strategy
@@ -198,6 +198,8 @@ class OptionStrategy(Strategy):
 
 # for saving and loading custom data greeks, use True, False then False, True below
 stream_data, load_greeks = False, False
+# stream_data, load_greeks = True, False
+# stream_data, load_greeks = False, True
 
 actors = [
     ImportableActorConfig(
@@ -248,17 +250,21 @@ engine_config = BacktestEngineConfig(
 # BacktestRunConfig
 
 data = [
+    # TODO using instrument_id and bar_spec only, or instrument_ids and bar_spec only, or bar_types only
     BacktestDataConfig(
         data_cls=Bar,
         catalog_path=catalog.path,
         instrument_id=InstrumentId.from_str(f"{future_symbols[0]}.GLBX"),
+        # instrument_ids=[InstrumentId.from_str(f"{future_symbols[0]}.GLBX")],
         bar_spec="1-MINUTE-LAST",
+        # bar_types=[f"{future_symbols[0]}.GLBX-1-MINUTE-LAST-EXTERNAL"],
         # start_time=start_time,
         # end_time=end_time,
     ),
     BacktestDataConfig(
         data_cls=QuoteTick,
         catalog_path=catalog.path,
+        # instrument_ids=[InstrumentId.from_str(f"{option_symbols[0]}.GLBX"), InstrumentId.from_str(f"{option_symbols[1]}.GLBX")],
     ),
 ]
 
@@ -289,7 +295,7 @@ configs = [
         engine=engine_config,
         data=data,
         venues=venues,
-        chunk_size=None,  # use None when loading custom data
+        chunk_size=None,  # use None when loading custom data, else a value of 10_000 for example
     ),
 ]
 
@@ -300,15 +306,24 @@ results = node.run(raise_exception=True)
 
 # %%
 if stream_data:
-    # 'overwrite_or_ignore' keeps existing data intact, 'delete_matching' overwrites everything, see in pyarrow/dataset.py
     catalog.convert_stream_to_data(
         results[0].instance_id,
         GreeksData,
-        basename_template="part-{i}",
-        partitioning=["date"],
-        # mode=CatalogWriteMode.NEWFILE, # TODO comment partitioning option above to test this writing mode
-        existing_data_behavior="overwrite_or_ignore",
+        mode=CatalogWriteMode.NEWFILE,
     )
+
+    # other possibility, partitioning data by date (because GreeksData contains a date field)
+    # 'overwrite_or_ignore' keeps existing data intact, 'delete_matching' overwrites everything, see in pyarrow/dataset.py
+    # catalog.convert_stream_to_data(
+    #     results[0].instance_id,
+    #     GreeksData,
+    #     partitioning=["date"],
+    #     existing_data_behavior="overwrite_or_ignore",
+    # )
+
+# %%
+# catalog.consolidate_catalog()
+# catalog.consolidate_data(GreeksData, instrument_id=InstrumentId.from_str("ESM4 P5230.GLBX"))
 
 # %% [markdown]
 # ## backtest results

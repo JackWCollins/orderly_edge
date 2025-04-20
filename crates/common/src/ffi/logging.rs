@@ -66,7 +66,7 @@ impl DerefMut for LogGuard_API {
 /// Initializes logging.
 ///
 /// Logging should be used for Python and sync Rust logic which is most of
-/// the components in the main `nautilus_trader` package.
+/// the components in the [nautilus_trader](https://pypi.org/project/nautilus_trader) package.
 /// Logging can be configured to filter components and write up to a specific level only
 /// by passing a configuration using the `NAUTILUS_LOG` environment variable.
 ///
@@ -92,6 +92,8 @@ pub unsafe extern "C" fn logging_init(
     is_colored: u8,
     is_bypassed: u8,
     print_config: u8,
+    max_file_size: u64,
+    max_backup_count: u32,
 ) -> LogGuard_API {
     let level_stdout = map_log_level_to_filter(level_stdout);
     let level_file = map_log_level_to_filter(level_file);
@@ -107,13 +109,21 @@ pub unsafe extern "C" fn logging_init(
         u8_as_bool(print_config),
     );
 
+    // Configure file rotation if max_file_size > 0
+    let file_rotate = if max_file_size > 0 {
+        Some((max_file_size, max_backup_count))
+    } else {
+        None
+    };
+
     let directory =
         unsafe { optional_cstr_to_str(directory_ptr).map(std::string::ToString::to_string) };
     let file_name =
         unsafe { optional_cstr_to_str(file_name_ptr).map(std::string::ToString::to_string) };
     let file_format =
         unsafe { optional_cstr_to_str(file_format_ptr).map(std::string::ToString::to_string) };
-    let file_config = FileWriterConfig::new(directory, file_name, file_format);
+
+    let file_config = FileWriterConfig::new(directory, file_name, file_format, file_rotate);
 
     if u8_as_bool(is_bypassed) {
         logging_set_bypass();

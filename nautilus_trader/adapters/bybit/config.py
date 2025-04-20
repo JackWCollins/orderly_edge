@@ -24,7 +24,10 @@ from nautilus_trader.config import PositiveInt
 
 
 if TYPE_CHECKING:
+    from nautilus_trader.adapters.bybit.common.enums import BybitMarginMode
+    from nautilus_trader.adapters.bybit.common.enums import BybitPositionMode
     from nautilus_trader.adapters.bybit.common.enums import BybitProductType
+    from nautilus_trader.adapters.bybit.common.symbol import BybitSymbol
 
 
 class BybitDataClientConfig(LiveDataClientConfig, frozen=True):
@@ -52,6 +55,9 @@ class BybitDataClientConfig(LiveDataClientConfig, frozen=True):
         The interval (minutes) between reloading instruments from the venue.
     recv_window_ms : PositiveInt, default 5000
         The receive window (milliseconds) for Bybit HTTP requests.
+    bars_timestamp_on_close : bool, default True
+        If the ts_event timestamp for bars should be on the open or close or the bar.
+        If True, then ts_event will be on the close of the bar.
 
     """
 
@@ -63,6 +69,7 @@ class BybitDataClientConfig(LiveDataClientConfig, frozen=True):
     testnet: bool = False
     update_instruments_interval_mins: PositiveInt | None = 60
     recv_window_ms: PositiveInt = 5_000
+    bars_timestamp_on_close: bool = True
 
 
 class BybitExecClientConfig(LiveExecClientConfig, frozen=True):
@@ -110,6 +117,12 @@ class BybitExecClientConfig(LiveExecClientConfig, frozen=True):
         The receive window (milliseconds) for Bybit HTTP requests.
     ws_trade_timeout_secs : float, default 5.0
         The timeout for trade websocket messages.
+    futures_leverages : dict[BybitSymbol, PositiveInt], optional
+        The leverages for futures.
+    position_mode : BybitPositionMode, optional
+        The position mode for `USDT perpetual` and `Inverse futures`.
+    margin_mode : BybitMarginMode, optional
+        Set Margin Mode.
 
     Warnings
     --------
@@ -133,3 +146,6 @@ class BybitExecClientConfig(LiveExecClientConfig, frozen=True):
     retry_delay: PositiveFloat | None = None
     recv_window_ms: PositiveInt = 5_000
     ws_trade_timeout_secs: float | None = 5.0
+    futures_leverages: dict[BybitSymbol, PositiveInt] | None = None
+    position_mode: dict[BybitSymbol, BybitPositionMode] | None = None
+    margin_mode: BybitMarginMode | None = None

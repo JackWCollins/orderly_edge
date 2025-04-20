@@ -21,10 +21,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use ustr::Ustr;
 
-use super::{
-    any::OrderAny,
-    base::{Order, OrderCore},
-};
+use super::{Order, OrderAny, OrderCore};
 use crate::{
     enums::{
         ContingencyType, LiquiditySide, OrderSide, OrderStatus, OrderType, PositionSide,
@@ -330,20 +327,24 @@ impl Order for TrailingStopMarketOrder {
         self.init_id
     }
 
-    fn ts_last(&self) -> UnixNanos {
-        self.ts_last
-    }
-
-    fn ts_accepted(&self) -> Option<UnixNanos> {
-        self.ts_accepted
+    fn ts_init(&self) -> UnixNanos {
+        self.ts_init
     }
 
     fn ts_submitted(&self) -> Option<UnixNanos> {
         self.ts_submitted
     }
 
-    fn ts_init(&self) -> UnixNanos {
-        self.ts_init
+    fn ts_accepted(&self) -> Option<UnixNanos> {
+        self.ts_accepted
+    }
+
+    fn ts_closed(&self) -> Option<UnixNanos> {
+        self.ts_closed
+    }
+
+    fn ts_last(&self) -> UnixNanos {
+        self.ts_last
     }
 
     fn events(&self) -> Vec<&OrderEventAny> {

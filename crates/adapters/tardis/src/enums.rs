@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString, FromRepr};
 use ustr::Ustr;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display, FromRepr, EnumString)]
+#[strum(ascii_case_insensitive)]
+#[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 /// The instrument type for the symbol.
 pub enum InstrumentType {
@@ -29,7 +31,7 @@ pub enum InstrumentType {
     Combo,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display, FromRepr, EnumString)]
 #[serde(rename_all = "lowercase")]
 /// The type of option.
 pub enum OptionType {
@@ -38,7 +40,7 @@ pub enum OptionType {
 }
 
 /// The aggressor side of the trade.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display, FromRepr, EnumString)]
 #[serde(rename_all = "lowercase")]
 pub enum TradeSide {
     Buy,
@@ -48,7 +50,7 @@ pub enum TradeSide {
 
 /// The bar kind.
 #[allow(missing_docs)]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display, FromRepr, EnumString)]
 #[serde(rename_all = "lowercase")]
 pub enum BarKind {
     Time,
@@ -167,8 +169,8 @@ impl Exchange {
                 Self::HuobiDm,
                 Self::HuobiDmLinearSwap,
                 Self::HuobiDmOptions,
-                Self::HuobiDmSwap,
             ],
+            "HUOBI_DELIVERY" => vec![Self::HuobiDmSwap],
             "KRAKEN" => vec![Self::Kraken],
             "KUCOIN" => vec![Self::Kucoin],
             "MANGO" => vec![Self::Mango],
@@ -228,7 +230,7 @@ impl Exchange {
             Self::HuobiDm => "HUOBI",
             Self::HuobiDmLinearSwap => "HUOBI",
             Self::HuobiDmOptions => "HUOBI",
-            Self::HuobiDmSwap => "HUOBI",
+            Self::HuobiDmSwap => "HUOBI_DELIVERY",
             Self::Kraken => "KRAKEN",
             Self::Kucoin => "KUCOIN",
             Self::Mango => "MANGO",

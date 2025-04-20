@@ -48,6 +48,7 @@ from nautilus_trader.model.events.order cimport OrderSubmitted
 from nautilus_trader.model.events.order cimport OrderTriggered
 from nautilus_trader.model.events.order cimport OrderUpdated
 from nautilus_trader.model.functions cimport contingency_type_to_str
+from nautilus_trader.model.functions cimport order_side_to_pyo3
 from nautilus_trader.model.functions cimport order_side_to_str
 from nautilus_trader.model.functions cimport order_status_to_pyo3
 from nautilus_trader.model.functions cimport order_type_to_pyo3
@@ -219,6 +220,7 @@ cdef class Order:
         self.ts_init = init.ts_init
         self.ts_submitted = 0
         self.ts_accepted = 0
+        self.ts_closed = 0
         self.ts_last = init.ts_init
 
     def __eq__(self, Order other) -> bool:
@@ -449,7 +451,7 @@ cdef class Order:
             trader_id=nautilus_pyo3.TraderId(self.trader_id.value),
             client_order_id=nautilus_pyo3.ClientOrderId(self.client_order_id.value),
             venue_order_id=nautilus_pyo3.VenueOrderId(self.venue_order_id.value) if self.venue_order_id else None,
-            side=nautilus_pyo3.OrderSide.BUY if self.side == OrderSide.BUY else nautilus_pyo3.OrderSide.SELL,
+            side=order_side_to_pyo3(self.side),
             price=nautilus_pyo3.Price(price.as_f64_c(), price._mem.precision),
             size=nautilus_pyo3.Quantity(self.leaves_qty.as_f64_c(), self.leaves_qty._mem.precision),
             order_type=order_type_to_pyo3(self.order_type),
@@ -789,7 +791,7 @@ cdef class Order:
     @property
     def is_closed(self):
         """
-        Return whether the order is closed.
+        Return whether the order is closed (lifecycle completed).
 
         An order is considered closed when its status can no longer change.
         The possible statuses of closed orders include;
@@ -1066,14 +1068,14 @@ cdef class Order:
         self.ts_last = event.ts_event
 
     cdef void _denied(self, OrderDenied event):
-        pass  # Do nothing else
+        self.ts_closed = event.ts_event
 
     cdef void _submitted(self, OrderSubmitted event):
         self.account_id = event.account_id
         self.ts_submitted = event.ts_event
 
     cdef void _rejected(self, OrderRejected event):
-        pass  # Do nothing else
+        self.ts_closed = event.ts_event
 
     cdef void _accepted(self, OrderAccepted event):
         self.venue_order_id = event.venue_order_id
@@ -1088,16 +1090,17 @@ cdef class Order:
         raise NotImplementedError("method `_triggered` must be implemented in the subclass")  # pragma: no cover
 
     cdef void _canceled(self, OrderCanceled event):
-        pass  # Do nothing else
+        self.ts_closed = event.ts_event
 
     cdef void _expired(self, OrderExpired event):
-        pass  # Do nothing else
+        self.ts_closed = event.ts_event
 
     cdef void _filled(self, OrderFilled fill):
         if self.filled_qty._mem.raw + fill.last_qty._mem.raw < self.quantity._mem.raw:
             self._fsm.trigger(OrderStatus.PARTIALLY_FILLED)
         else:
             self._fsm.trigger(OrderStatus.FILLED)
+            self.ts_closed = fill.ts_event
 
         self.venue_order_id = fill.venue_order_id
         self.position_id = fill.position_id

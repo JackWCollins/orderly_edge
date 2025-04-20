@@ -39,12 +39,34 @@ class TestOrderFactory:
             clock=TestClock(),
         )
 
+    def test_counts(self):
+        # Arrange, Act, Assert
+        assert self.order_factory.get_client_order_id_count() == 0
+        assert self.order_factory.get_order_list_id_count() == 0
+
     def test_generate_client_order_id(self):
         # Arrange, Act
         result = self.order_factory.generate_client_order_id()
 
         # Assert
         assert result == ClientOrderId("O-19700101-000000-000-001-1")
+        assert self.order_factory.get_client_order_id_count() == 1
+
+    def test_generate_uuid_client_order_id(self):
+        # Arrange
+        order_factory = OrderFactory(
+            trader_id=self.trader_id,
+            strategy_id=self.strategy_id,
+            clock=TestClock(),
+            use_uuid_client_order_ids=True,
+        )
+
+        # Act
+        result = order_factory.generate_client_order_id()
+
+        # Assert
+        assert order_factory.use_uuid_client_order_ids
+        assert len(result.value) == 36
 
     def test_generate_order_list_id(self):
         # Arrange, Act
@@ -96,3 +118,4 @@ class TestOrderFactory:
 
         # Assert
         assert len(order_list) == 3
+        assert self.order_factory.get_order_list_id_count() == 1

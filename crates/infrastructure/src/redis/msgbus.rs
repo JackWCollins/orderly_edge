@@ -26,8 +26,8 @@ use bytes::Bytes;
 use futures::stream::Stream;
 use nautilus_common::{
     msgbus::{
-        CLOSE_TOPIC,
-        database::{BusMessage, DatabaseConfig, MessageBusConfig, MessageBusDatabaseAdapter},
+        BusMessage, CLOSE_TOPIC,
+        database::{DatabaseConfig, MessageBusConfig, MessageBusDatabaseAdapter},
     },
     runtime::get_runtime,
 };
@@ -91,7 +91,7 @@ impl MessageBusDatabaseAdapter for RedisMessageBusDatabase {
         // Create publish task (start the runtime here for now)
         let pub_handle = Some(get_runtime().spawn(async move {
             if let Err(e) = publish_messages(pub_rx, trader_id, instance_id, config_clone).await {
-                log::error!("Failed to spawn task '{}': {}", MSGBUS_PUBLISH, e);
+                log::error!("Error in task '{MSGBUS_PUBLISH}': {e}");
             };
         }));
 
@@ -108,7 +108,7 @@ impl MessageBusDatabaseAdapter for RedisMessageBusDatabase {
                         stream_messages(stream_tx, db_config, external_streams, stream_signal_clone)
                             .await
                     {
-                        log::error!("Failed to spawn task '{}': {}", MSGBUS_STREAM, e);
+                        log::error!("Error in task '{MSGBUS_STREAM}': {e}");
                     }
                 })),
             )
@@ -144,7 +144,6 @@ impl MessageBusDatabaseAdapter for RedisMessageBusDatabase {
     }
 
     /// Returns whether the message bus database adapter publishing channel is closed.
-    #[must_use]
     fn is_closed(&self) -> bool {
         self.pub_tx.is_closed()
     }
@@ -403,7 +402,7 @@ pub async fn stream_messages(
                 }
             }
             Err(e) => {
-                return Err(anyhow::anyhow!("Error reading from stream: {e:?}"));
+                anyhow::bail!("Error reading from stream: {e:?}");
             }
         }
     }
@@ -421,7 +420,7 @@ fn decode_bus_message(stream_msg: &redis::Value) -> anyhow::Result<BusMessage> {
         let topic = match &stream_msg[1] {
             redis::Value::BulkString(bytes) => match String::from_utf8(bytes.clone()) {
                 Ok(topic) => topic,
-                Err(e) => anyhow::bail!("Error parsing topic: {}", e),
+                Err(e) => anyhow::bail!("Error parsing topic: {e}"),
             },
             _ => {
                 anyhow::bail!("Invalid topic format: {stream_msg:?}");

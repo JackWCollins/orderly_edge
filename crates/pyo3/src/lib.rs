@@ -22,9 +22,11 @@
 //!
 //! This crate provides feature flags to control source code inclusion during compilation,
 //! depending on the intended use case, i.e. whether to provide Python bindings
-//! for the main `nautilus_trader` Python package, or as part of a Rust only build.
+//! for the [nautilus_trader](https://pypi.org/project/nautilus_trader) Python package,
+//! or as part of a Rust only build.
 //!
-//! - `ffi`: Enables the C foreign function interface (FFI) from `cbindgen`.
+//! - `ffi`: Enables the C foreign function interface (FFI) from [cbindgen](https://github.com/mozilla/cbindgen).
+//! - `high-precision`: Enables [high-precision mode](https://nautilustrader.io/docs/nightly/getting_started/installation#precision-mode) to use 128-bit value types.
 
 #![warn(rustc::all)]
 #![deny(unsafe_code)]
@@ -109,8 +111,22 @@ fn nautilus_pyo3(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
     re_export_module_attributes(m, n)?;
 
-    let n = "test_kit";
-    let submodule = pyo3::wrap_pymodule!(nautilus_test_kit::python::test_kit);
+    let n = "testkit";
+    let submodule = pyo3::wrap_pymodule!(nautilus_testkit::python::testkit);
+    m.add_wrapped(submodule)?;
+    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
+    re_export_module_attributes(m, n)?;
+
+    let n = "trading";
+    let submodule = pyo3::wrap_pymodule!(nautilus_trading::python::trading);
+    m.add_wrapped(submodule)?;
+    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
+    re_export_module_attributes(m, n)?;
+
+    // Adapters
+
+    let n = "coinbase_intx";
+    let submodule = pyo3::wrap_pymodule!(nautilus_coinbase_intx::python::coinbase_intx);
     m.add_wrapped(submodule)?;
     sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
     re_export_module_attributes(m, n)?;
@@ -123,12 +139,6 @@ fn nautilus_pyo3(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     let n = "tardis";
     let submodule = pyo3::wrap_pymodule!(nautilus_tardis::python::tardis);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    re_export_module_attributes(m, n)?;
-
-    let n = "trading";
-    let submodule = pyo3::wrap_pymodule!(nautilus_trading::python::trading);
     m.add_wrapped(submodule)?;
     sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
     re_export_module_attributes(m, n)?;
